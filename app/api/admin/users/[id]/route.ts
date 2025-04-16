@@ -3,10 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 
+// Define the Params type
+type Params = {
+  params: {
+    id: string;
+  };
+};
+
 // GET - Fetch a specific user with details
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  params: Params
 ) {
   const session = await auth();
   
@@ -24,7 +31,7 @@ export async function GET(
     });
   }
 
-  const userId = params.id;
+  const userId = params.params.id;
   
   try {
     // Fetch user details with subscription and videos
@@ -68,7 +75,7 @@ export async function GET(
 // PATCH - Update user role
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  params: Params
 ) {
   const session = await auth();
   
@@ -86,7 +93,7 @@ export async function PATCH(
     });
   }
 
-  const userId = params.id;
+  const userId = params.params.id;
   
   try {
     // Parse request body
@@ -129,7 +136,7 @@ export async function PATCH(
 // DELETE - Delete a user
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  params: Params
 ) {
   const session = await auth();
   
@@ -147,7 +154,7 @@ export async function DELETE(
     });
   }
 
-  const userId = params.id;
+  const userId = params.params.id;
   
   try {
     // Prevent deleting your own account

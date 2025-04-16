@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { useToast } from "@/hooks/use-toast"
 import {
   Toast,
@@ -10,7 +11,9 @@ import {
   ToastViewport,
 } from "@/components/ui/toast"
 
-export function Toaster() {
+// This is a placeholder component to make the build succeed
+// Replace with actual implementation when ready
+export const Toaster: React.FC = () => {
   const { toasts } = useToast()
 
   return (

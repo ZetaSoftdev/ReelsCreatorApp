@@ -8,7 +8,15 @@ import Timeline from "@/components/edit/Timeline";
 import VideoControls from "@/components/edit/VideoControls";
 import VideoPreview from "@/components/edit/VideoPreview";
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, useRef, RefObject } from "react";
+import { useState, useEffect, useRef, RefObject, Suspense } from "react";
+import { VideoEditor as VideoEditorComponent } from "@/components/dashboard/VideoEditor";
+import { SidePanel } from "@/components/dashboard/SidePanel";
+import { PageTitle } from "@/components/dashboard/PageTitle";
+import { VideoEditorProvider } from "@/components/context/VideoEditorContext";
+import { useRouter } from "next/navigation";
+import Loading from "@/components/Loading";
+import { DeleteVideoDialog } from "@/components/edit/DeleteVideoDialog";
+import { toast } from "@/components/ui/use-toast";
 
 interface Subtitle {
   startTime: number;
@@ -16,16 +24,19 @@ interface Subtitle {
   text: string;
 }
 
-export default function VideoEditor() {
+function VideoEditorContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const videoUrl = searchParams.get("videoUrl");
   const srtUrl = searchParams.get("srtUrl");
   const videoName = searchParams.get("videoName");
+  const videoId = searchParams.get("videoId");
 
   const [videoSrc, setVideoSrc] = useState<string>("");
   const [isYoutube, setIsYoutube] = useState(false);
   const [selectedTool, setSelectedTool] = useState("caption");
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null) as RefObject<HTMLVideoElement>;
 
   useEffect(() => {
@@ -214,46 +225,81 @@ console.log("subtitle in edit page: ",srtUrl)
     console.log(`Cut video from ${start} to ${end}`);
   };
 
+  const handleDeleteVideo = async () => {
+    if (!videoId) {
+      toast({
+        title: "Error",
+        description: "Cannot delete video. Video ID is missing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/videos/${videoId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Failed to delete video");
+      }
+
+      toast({
+        title: "Success",
+        description: "Video deleted successfully",
+      });
+      router.push("/dashboard/home");
+    } catch (error) {
+      console.error("Error deleting video:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete video",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
-    <div className="bg-slate50 h-screen flex flex-col">
-      <Navbar 
-        selectedTool={selectedTool} 
-        setSelectedTool={setSelectedTool}
-        videoTitle={videoName || "Untitled Video"}
-      />
-
-      <div className="flex h-[calc(100vh-4rem)]">
-        {/* Sidebar */}
-        <div className="w-1/3 p-4 bg-bgWhite border-r shadow-md overflow-y-auto">
-          {selectedTool === "crop" && <CropSection />}
-          {selectedTool === "caption" && <CaptionSection subtitles={subtitles} />}
-          {selectedTool === "style" && <EditSection />}
-          {selectedTool === "translate" && <AutoTranslateSection />}
-        </div>
-
-        {/* Right side content */}
-        <div className="w-2/3 flex flex-col">
-          {/* Video Preview */}
-          <div className="flex-grow">
-            <VideoPreview 
-              videoSrc={videoSrc} 
-              isYoutube={isYoutube} 
-              videoRef={videoRef} 
+    <div className="flex h-full w-full flex-col md:flex-row">
+      <SidePanel />
+      <div className="flex-1 flex flex-col">
+        <div className="flex justify-between items-center p-4">
+          <h2 className="text-lg font-medium">{videoName || "Untitled Video"}</h2>
+          {videoId && (
+            <DeleteVideoDialog
+              videoName={videoName}
+              onDelete={handleDeleteVideo}
+              isDeleting={isDeleting}
             />
-          </div>
-
-          {/* Video Controls and Timeline */}
-          <div className="">
-            <VideoControls videoRef={videoRef} />
-            <Timeline 
-              videoUrl={videoSrc} 
-              subtitles={subtitles}
-              videoRef={videoRef}
-              onCutVideo={handleCutVideo}
-            />
-          </div>
+          )}
         </div>
+        <VideoEditorComponent />
       </div>
     </div>
+  );
+}
+
+// Main page component
+export default function VideoEditor() {
+  const router = useRouter();
+
+  return (
+    <VideoEditorProvider>
+      <div className="flex h-full flex-col overflow-hidden">
+        <PageTitle
+          title="Edit Video"
+          description="Edit your video and create clips"
+          backButton
+          onBackClick={() => router.push("/dashboard")}
+        />
+        <Suspense fallback={<Loading className="h-full" />}>
+          <VideoEditorContent />
+        </Suspense>
+      </div>
+    </VideoEditorProvider>
   );
 } 
