@@ -1,0 +1,22 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+#Rules for AI video editing project
+
+- This AI video editing app is intended to be an app for content creators to ease their content creation
+- remember that you have to discuss everything with me and ask me as much you can to make yourself clear about my requirements, i will appreciate when you make yourself clear and ask me for everything and ask for my permission
+- remember that you dont have to mock any functionality and do all the implementation while keeping in mind that it is for production environment.
+
+Style guide:
+
+Colors:
+- remember that i like a clean and minimalist design - you can use white, dark grey, purple (or light purple), and yellow/golden (stick with the shades we have already used) 
+- Also make sure not to use black color as it feels very aggressive (instead use dark grey like #343434  
+
+Fonts:
+- Dont use large font size that seems cringe
+- always use poppins as primary font, for secondary you may use robotto, Futura or Montserrat (and Allura where needed a script font)
+
+

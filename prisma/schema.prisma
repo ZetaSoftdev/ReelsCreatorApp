@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  password     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  profileImage String?
+  role         Role          @default(USER)
+  subscription Subscription?
+  videos       Video[]
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  plan                 String
+  status               String
+  startDate            DateTime  @default(now())
+  endDate              DateTime?
+  minutesAllowed       Int
+  minutesUsed          Int       @default(0)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Video {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  originalUrl String
+  duration    Int
+  fileSize    Int
+  uploadedAt  DateTime  @default(now())
+  status      String
+  processedAt DateTime?
+  uploadPath  String
+  error       String?
+  clips       Clip[]
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Clip {
+  id            String   @id @default(cuid())
+  videoId       String
+  title         String?
+  url           String
+  startTime     Int
+  endTime       Int
+  createdAt     DateTime @default(now())
+  filePath      String
+  resizedUrl    String?
+  resizedPath   String?
+  subtitlesUrl  String?
+  subtitlesPath String?
+  video         Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model BrandingSettings {
+  id           String   @id @default(cuid())
+  siteName     String   @default("Reels Creator")
+  logoUrl      String?
+  logoPath     String?
+  faviconUrl   String?
+  faviconPath  String?
+  primaryColor String   @default("#8B5CF6")
+  accentColor  String   @default("#F59E0B")
+  defaultFont  String   @default("Poppins")
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
