@@ -87,6 +87,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           }
         })
       ],
+    trustHost: true,
     callbacks: {
       async signIn({ user, account }) {
         // For credentials provider, we already verified in authorize
