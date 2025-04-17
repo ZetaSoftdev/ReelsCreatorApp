@@ -10,8 +10,8 @@ import { Role } from '@/lib/constants';
 // Define default branding settings
 const defaultBranding = {
   siteName: "Reels Creator",
-  logoUrl: "/logo.png",
-  faviconUrl: "/favicon.ico",
+  logoUrl: "/branding/logo.png",
+  faviconUrl: "/branding/favicon.png",
   primaryColor: "#8B5CF6",
   accentColor: "#F59E0B",
   defaultFont: "Poppins"
@@ -90,8 +90,8 @@ async function ensureBrandingSettings() {
         await prisma.brandingSettings.create({
           data: {
             siteName: "Reels Creator",
-            logoUrl: "/logo.png",
-            faviconUrl: "/favicon.ico",
+            logoUrl: "/branding/logo.png",
+            faviconUrl: "/branding/favicon.png",
             primaryColor: "#8B5CF6",
             accentColor: "#F59E0B",
             defaultFont: "Poppins"
@@ -103,8 +103,8 @@ async function ensureBrandingSettings() {
         // Fallback to file storage
         await writeSettingsToFile({
           siteName: "Reels Creator",
-          logoUrl: "/logo.png",
-          faviconUrl: "/favicon.ico",
+          logoUrl: "/branding/logo.png",
+          faviconUrl: "/branding/favicon.png",
           primaryColor: "#8B5CF6",
           accentColor: "#F59E0B",
           defaultFont: "Poppins"

@@ -29,7 +29,7 @@ async function getBrandingSettings() {
       // Return default values directly instead of making API call
       return {
         siteName: 'Reels Creator',
-        faviconUrl: '/favicon.ico',
+        faviconUrl: '/branding/favicon.png',
         primaryColor: '#8B5CF6',
         accentColor: '#F59E0B',
         defaultFont: 'Poppins'
@@ -53,7 +53,7 @@ async function getBrandingSettings() {
     console.error("Error in getBrandingSettings:", error);
     return {
       siteName: 'Reels Creator',
-      faviconUrl: '/favicon.ico'
+      faviconUrl: '/branding/favicon.png'
     };
   }
 }
