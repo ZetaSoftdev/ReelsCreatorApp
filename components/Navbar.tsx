@@ -74,7 +74,7 @@ const Navbar = () => {
         {/* Logo */}
         <Link href={"/"} className="flex items-center gap-2 pl-4">
           <Image 
-            src={branding.logoUrl || "/trod.png"} 
+            src={branding.logoUrl || "/branding/logo.png"} 
             alt={branding.siteName} 
             className="text-white" 
             width={130} 
