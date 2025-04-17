@@ -45,10 +45,18 @@ export function LogoProvider({ children }: { children: React.ReactNode }) {
   const fetchBrandingSettings = async () => {
     try {
       console.log('LogoContext: Fetching branding settings');
-      const response = await fetch('/api/branding', {
+      
+      // Add a cache-busting parameter to ensure fresh data
+      const timestamp = Date.now();
+      const response = await fetch(`/api/branding?t=${timestamp}`, {
         cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        },
         next: { revalidate: 0 }
       });
+      
       if (response.ok) {
         const data = await response.json();
         console.log('LogoContext: Received branding data:', data);
@@ -81,6 +89,22 @@ export function LogoProvider({ children }: { children: React.ReactNode }) {
   // Fetch branding settings when component mounts
   useEffect(() => {
     fetchBrandingSettings();
+    
+    // Add an event listener to refresh branding on window focus
+    // This helps ensure branding is updated when user returns to the tab
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('LogoContext: Document visible, refreshing branding');
+        fetchBrandingSettings();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Clean up event listener on unmount
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   const updateLogo = (url: string) => {

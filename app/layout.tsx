@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 async function getBrandingSettings() {
   try {
     // Skip API calls during build time to avoid ECONNREFUSED and timeouts
-    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PHASE === 'build') {
+    if (process.env.NEXT_PHASE === 'build') {
       console.log('Skipping branding API call during build phase');
       // Return default values directly instead of making API call
       return {
@@ -36,25 +36,19 @@ async function getBrandingSettings() {
       };
     }
     
-    // Only make API calls in development when not building
-    try {
-      const response = await fetch('/api/branding', { 
-        cache: 'force-cache'  // Use force-cache instead of no-store
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch branding: ${response.status}`);
-      }
-      
-      return await response.json();
-    } catch (fetchError) {
-      console.error("Error fetching branding:", fetchError);
-      // Fall back to defaults on error
-      return {
-        siteName: 'Reels Creator',
-        faviconUrl: '/favicon.ico'
-      };
+    // Add a cache-busting timestamp to ensure we get fresh data
+    const timestamp = Date.now();
+    const response = await fetch(`/api/branding?t=${timestamp}`, { 
+      cache: 'no-store',
+      next: { revalidate: 0 }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch branding: ${response.status}`);
     }
+    
+    return await response.json();
+    
   } catch (error) {
     console.error("Error in getBrandingSettings:", error);
     return {

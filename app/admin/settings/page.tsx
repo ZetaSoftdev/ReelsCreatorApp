@@ -224,15 +224,33 @@ export default function SettingsPage() {
       // Set success status
       setSaveStatus("success");
       
-      // Show success message and refresh the page after a delay
-      alert("Branding settings updated successfully. The page will reload to apply the changes.");
+      // Show success message
+      alert("Branding settings updated successfully. The page will now reload to apply changes.");
       
-      // Refresh the page to see the new branding
-      setTimeout(() => {
+      // Clear any cached branding data
+      try {
+        // Force a fresh fetch of the branding data to clear cache
+        const cacheBuster = Date.now();
+        await fetch(`/api/branding?t=${cacheBuster}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        // Wait a moment for the backend to settle
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Hard reload the page to see the new branding
+        window.location.href = window.location.href.split('?')[0] + '?cache=' + cacheBuster;
+      } catch (refreshError) {
+        console.error('Error refreshing branding cache:', refreshError);
+        // Still do a regular reload if the cache busting fails
         window.location.reload();
-      }, 1500);
+      }
       
-      // Reset status after 3 seconds
+      // Reset status after 3 seconds (though the page will likely reload before this)
       setTimeout(() => {
         setSaveStatus("idle");
       }, 3000);
