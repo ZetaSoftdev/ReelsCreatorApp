@@ -6,9 +6,6 @@ import { Role } from "@/lib/constants";
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Create a fresh Prisma client instance
-const prismaClient = new PrismaClient();
-
 // POST - Create a new subscription plan with special handling for form data
 export async function POST(req: NextRequest) {
   try {
@@ -65,8 +62,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one feature is required" }, { status: 400 });
     }
     
-    // Create subscription plan using Prisma client
+    // Create Prisma client inside the function
+    const prismaClient = new PrismaClient();
+    
     try {
+      // Create subscription plan using Prisma client
       const newPlan = await prismaClient.subscriptionPlan.create({
         data: {
           name,
@@ -82,6 +82,9 @@ export async function POST(req: NextRequest) {
         }
       });
       
+      // Disconnect client after use
+      await prismaClient.$disconnect();
+      
       // Return success
       return NextResponse.json({
         success: true,
@@ -89,6 +92,9 @@ export async function POST(req: NextRequest) {
         plan: newPlan
       }, { status: 201 });
     } catch (dbError: any) {
+      // Make sure to disconnect even if there's an error
+      await prismaClient.$disconnect();
+      
       console.error("Database error creating plan:", dbError);
       return NextResponse.json({
         error: "Database error creating plan",
