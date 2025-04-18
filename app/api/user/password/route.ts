@@ -4,6 +4,9 @@ import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcrypt'
 import { Prisma } from '@prisma/client'
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // Update user password
 export async function PUT(request: Request) {
   try {

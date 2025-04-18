@@ -5,6 +5,9 @@ import { Prisma } from '@prisma/client'
 import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // GET user details
 export async function GET() {
   try {

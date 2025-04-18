@@ -6,6 +6,9 @@ import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs/promises'
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // POST endpoint to handle image uploads
 export async function POST(request: Request) {
   try {

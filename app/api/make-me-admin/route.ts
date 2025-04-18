@@ -2,6 +2,9 @@ import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // POST - Make the current user an admin
 export async function POST(req: NextRequest) {
   try {

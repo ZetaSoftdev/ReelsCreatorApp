@@ -7,6 +7,9 @@ import fs from 'fs/promises';
 import { auth } from "@/auth";
 import { Role } from '@/lib/constants';
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // Define default branding settings
 const defaultBranding = {
   siteName: "Reels Creator",

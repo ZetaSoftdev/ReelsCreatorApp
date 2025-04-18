@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // Define the Params type
 type Params = {
   params: {

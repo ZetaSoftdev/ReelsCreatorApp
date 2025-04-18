@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 import bcrypt from "bcryptjs";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 export async function GET(request: NextRequest) {
   try {
     // Check if user is authenticated and is an admin

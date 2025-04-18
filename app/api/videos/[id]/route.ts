@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // DELETE request handler
 export async function DELETE(
   request: NextRequest,
