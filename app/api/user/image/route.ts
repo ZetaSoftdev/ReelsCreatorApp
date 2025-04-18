@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { getPrismaClient } from '@/lib/railway-prisma'
+import prisma from '@/lib/railway-prisma'
 import { writeFile } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
@@ -21,9 +21,6 @@ export async function POST(request: Request) {
         { status: 401 }
       )
     }
-
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
 
     // Parse the multipart form data
     const formData = await request.formData()
@@ -87,7 +84,7 @@ export async function POST(request: Request) {
     const publicUrl = `/uploads/profiles/${filename}`
     
     // First check if user exists in database
-    const userExists = await prismaClient.user.findUnique({
+    const userExists = await prisma.user.findUnique({
       where: {
         id: session.user.id
       }
@@ -96,7 +93,7 @@ export async function POST(request: Request) {
     // If user doesn't exist yet (Google login case), create it first
     if (!userExists) {
       try {
-        await prismaClient.user.create({
+        await prisma.user.create({
           data: {
             id: session.user.id,
             name: session.user.name || '',
@@ -115,7 +112,7 @@ export async function POST(request: Request) {
     
     try {
       // Update the user's profile image in the database
-      const updatedUser = await prismaClient.user.update({
+      const updatedUser = await prisma.user.update({
         where: {
           id: session.user.id
         },

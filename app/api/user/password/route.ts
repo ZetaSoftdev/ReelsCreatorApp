@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import bcrypt from 'bcryptjs'
 import { Prisma } from '@prisma/client'
-import { getPrismaClient } from '@/lib/railway-prisma'
+import prisma from '@/lib/railway-prisma'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
@@ -69,11 +69,8 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Get PrismaClient instance from Railway-specific implementation
-    const prismaClient = getPrismaClient();
-
     // Get the user with their password
-    const user = await prismaClient.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: {
         id: session.user.id as string
       }
@@ -110,7 +107,7 @@ export async function PUT(request: Request) {
         const hashedPassword = await bcrypt.hash(data.newPassword, 10)
 
         // Update the password in the database
-        await prismaClient.user.update({
+        await prisma.user.update({
           where: {
             id: user.id
           },
@@ -174,7 +171,7 @@ export async function PUT(request: Request) {
       const hashedPassword = await bcrypt.hash(data.newPassword, 10)
 
       // Update the password in the database
-      await prismaClient.user.update({
+      await prisma.user.update({
         where: {
           id: user.id
         },
