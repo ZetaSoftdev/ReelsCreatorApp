@@ -1,10 +1,21 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { Role } from "@/lib/constants";
+import { PrismaClient } from '@prisma/client';
+import { USER_ROLES, ROLES } from "@/constants/roles";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Create a global variable for PrismaClient to enable connection reuse
+let prisma: PrismaClient;
+
+// Initialize PrismaClient lazily to avoid multiple instances in development
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 // Define the Params type
 type Params = {
@@ -18,58 +29,58 @@ export async function GET(
   req: NextRequest,
   params: Params
 ) {
-  const session = await auth();
-  
-  // Check if user is authenticated
-  if (!session?.user) {
-    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
-  
-  // Check if user is an admin
-  if (session.user.role !== Role.ADMIN) {
-    return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-    });
-  }
-
-  const userId = params.params.id;
-  
   try {
-    // Fetch user details with subscription and videos
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-      include: {
-        subscription: true,
-        videos: {
-          select: {
-            id: true,
-            title: true,
-            duration: true,
-            status: true,
-            uploadedAt: true,
-          },
-          orderBy: {
-            uploadedAt: 'desc',
-          },
-          take: 5, // Limit to most recent 5 videos
-        },
-      },
-    });
+    const session = await auth();
     
-    if (!user) {
-      return new NextResponse(JSON.stringify({ error: "User not found" }), {
-        status: 404,
+    // Check if user is authenticated
+    if (!session || !session.user) {
+      return new NextResponse(JSON.stringify({ message: "Unauthorized access" }), {
+        status: 401,
       });
     }
     
-    return NextResponse.json(user);
+    // Check if user is an admin
+    if (session.user.role !== USER_ROLES.ADMIN) {
+      return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
+        status: 403,
+      });
+    }
+
+    const userId = params.params.id;
+    
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
+    
+    try {
+      // Fetch user details with subscription and videos
+      const user = await prismaClient.user.findUnique({
+        where: {
+          id: userId,
+        },
+        include: {
+          subscription: true,
+          videos: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 5, // Limit to most recent 5 videos
+          },
+        },
+      });
+      
+      if (!user) {
+        return new NextResponse(JSON.stringify({ message: "User not found" }), {
+          status: 404,
+        });
+      }
+      
+      return NextResponse.json(user);
+    } catch (dbError) {
+      throw dbError;
+    }
   } catch (error) {
     console.error("Error fetching user details:", error);
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
+    return new NextResponse(JSON.stringify({ message: "An error occurred while fetching user details" }), {
       status: 500,
     });
   }
@@ -80,57 +91,64 @@ export async function PATCH(
   req: NextRequest,
   params: Params
 ) {
-  const session = await auth();
-  
-  // Check if user is authenticated
-  if (!session?.user) {
-    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
-  
-  // Check if user is an admin
-  if (session.user.role !== Role.ADMIN) {
-    return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-    });
-  }
-
-  const userId = params.params.id;
-  
   try {
+    const session = await auth();
+    
+    // Check if user is authenticated
+    if (!session || !session.user) {
+      return new NextResponse(JSON.stringify({ message: "Unauthorized access" }), {
+        status: 401,
+      });
+    }
+    
+    // Check if user is an admin
+    if (session.user.role !== USER_ROLES.ADMIN) {
+      return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
+        status: 403,
+      });
+    }
+
+    const userId = params.params.id;
+    
     // Parse request body
     const body = await req.json();
     
     // Validate role
     const { role } = body;
     
-    if (!role || !Object.values(Role).includes(role as Role)) {
-      return new NextResponse(JSON.stringify({ error: "Invalid role" }), {
+    if (role && !ROLES.includes(role)) {
+      return new NextResponse(JSON.stringify({ message: "Invalid role" }), {
         status: 400,
       });
     }
     
-    // Update user in database
-    const updatedUser = await prisma.user.update({
-      where: {
-        id: userId,
-      },
-      data: {
-        role: role,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-      },
-    });
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
     
-    return NextResponse.json(updatedUser);
+    try {
+      // Update user in database
+      const updatedUser = await prismaClient.user.update({
+        where: {
+          id: userId,
+        },
+        data: {
+          role: role,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      });
+      
+      return NextResponse.json(updatedUser);
+    } catch (dbError) {
+      throw dbError;
+    }
   } catch (error) {
-    console.error("Error updating user role:", error);
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
+    console.error("Error updating user:", error);
+    return new NextResponse(JSON.stringify({ message: "An error occurred while updating the user" }), {
       status: 500,
     });
   }
@@ -141,45 +159,52 @@ export async function DELETE(
   req: NextRequest,
   params: Params
 ) {
-  const session = await auth();
-  
-  // Check if user is authenticated
-  if (!session?.user) {
-    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-    });
-  }
-  
-  // Check if user is an admin
-  if (session.user.role !== Role.ADMIN) {
-    return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
-      status: 403,
-    });
-  }
-
-  const userId = params.params.id;
-  
   try {
+    const session = await auth();
+    
+    // Check if user is authenticated
+    if (!session || !session.user) {
+      return new NextResponse(JSON.stringify({ message: "Unauthorized access" }), {
+        status: 401,
+      });
+    }
+    
+    // Check if user is an admin
+    if (session.user.role !== USER_ROLES.ADMIN) {
+      return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
+        status: 403,
+      });
+    }
+
+    const userId = params.params.id;
+    
     // Prevent deleting your own account
-    if (session.user.id === userId) {
-      return new NextResponse(JSON.stringify({ error: "Cannot delete your own account" }), {
+    if (userId === session.user.id) {
+      return new NextResponse(JSON.stringify({ message: "You cannot delete your own account" }), {
         status: 400,
       });
     }
     
-    // Delete user
-    await prisma.user.delete({
-      where: {
-        id: userId,
-      },
-    });
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
     
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-    });
+    try {
+      // Delete user
+      await prismaClient.user.delete({
+        where: {
+          id: userId,
+        },
+      });
+      
+      return new NextResponse(JSON.stringify({ message: "User deleted successfully" }), {
+        status: 200,
+      });
+    } catch (dbError) {
+      throw dbError;
+    }
   } catch (error) {
     console.error("Error deleting user:", error);
-    return new NextResponse(JSON.stringify({ error: "Internal Server Error" }), {
+    return new NextResponse(JSON.stringify({ message: "An error occurred while deleting the user" }), {
       status: 500,
     });
   }

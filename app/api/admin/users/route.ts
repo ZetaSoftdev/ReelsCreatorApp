@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 import { Role } from "@/lib/constants";
 import bcrypt from "bcryptjs";
 
@@ -46,66 +46,78 @@ export async function GET(request: NextRequest) {
     const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
 
-    // Query users with pagination and filtering
-    const [users, totalUsers] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        orderBy,
-        skip,
-        take: pageSize,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          profileImage: true,
-          subscription: {
-            select: {
-              plan: true,
-              status: true,
+    // Create PrismaClient instance inside the function
+    const prismaClient = new PrismaClient();
+    
+    try {
+      // Query users with pagination and filtering
+      const [users, totalUsers] = await Promise.all([
+        prismaClient.user.findMany({
+          where,
+          orderBy,
+          skip,
+          take: pageSize,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            profileImage: true,
+            subscription: {
+              select: {
+                plan: true,
+                status: true,
+              },
             },
           },
+        }),
+        prismaClient.user.count({ where }),
+      ]);
+
+      // Get role distribution data
+      const usersByRole = await prismaClient.user.groupBy({
+        by: ["role"],
+        _count: {
+          role: true,
         },
-      }),
-      prisma.user.count({ where }),
-    ]);
+      });
 
-    // Get role distribution data
-    const usersByRole = await prisma.user.groupBy({
-      by: ["role"],
-      _count: {
-        role: true,
-      },
-    });
+      // Get subscription stats
+      const subscriptionStats = await prismaClient.subscription.groupBy({
+        by: ["status"],
+        _count: {
+          status: true,
+        },
+      });
+      
+      // Disconnect client after use
+      await prismaClient.$disconnect();
 
-    // Get subscription stats
-    const subscriptionStats = await prisma.subscription.groupBy({
-      by: ["status"],
-      _count: {
-        status: true,
-      },
-    });
+      // Calculate total pages
+      const totalPages = Math.ceil(totalUsers / pageSize);
 
-    // Calculate total pages
-    const totalPages = Math.ceil(totalUsers / pageSize);
+      // Format the response
+      const response = {
+        users,
+        pagination: {
+          total: totalUsers,
+          pageSize,
+          currentPage: page,
+          totalPages,
+        },
+        metadata: {
+          usersByRole,
+          subscriptionStats,
+        },
+      };
 
-    // Format the response
-    const response = {
-      users,
-      pagination: {
-        total: totalUsers,
-        pageSize,
-        currentPage: page,
-        totalPages,
-      },
-      metadata: {
-        usersByRole,
-        subscriptionStats,
-      },
-    };
-
-    return NextResponse.json(response);
+      return NextResponse.json(response);
+    } catch (dbError) {
+      // Make sure to disconnect even if there's an error
+      await prismaClient.$disconnect();
+      throw dbError;
+    }
   } catch (error) {
     console.error("Error fetching users:", error);
     return NextResponse.json(
@@ -155,39 +167,52 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if user with email already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    // Create PrismaClient instance inside the function
+    const prismaClient = new PrismaClient();
     
-    if (existingUser) {
-      return NextResponse.json(
-        { error: "User with this email already exists" },
-        { status: 409 }
-      );
+    try {
+      // Check if user with email already exists
+      const existingUser = await prismaClient.user.findUnique({
+        where: { email },
+      });
+      
+      if (existingUser) {
+        await prismaClient.$disconnect();
+        return NextResponse.json(
+          { error: "User with this email already exists" },
+          { status: 409 }
+        );
+      }
+      
+      // Hash the password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Create the user
+      const newUser = await prismaClient.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role: role ? (role as Role) : Role.USER,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          createdAt: true,
+        },
+      });
+      
+      // Disconnect client after use
+      await prismaClient.$disconnect();
+      
+      return NextResponse.json(newUser, { status: 201 });
+    } catch (dbError) {
+      // Make sure to disconnect even if there's an error
+      await prismaClient.$disconnect();
+      throw dbError;
     }
-    
-    // Hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Create the user
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role ? (role as Role) : Role.USER,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
-    
-    return NextResponse.json(newUser, { status: 201 });
   } catch (error) {
     console.error("Error creating user:", error);
     return NextResponse.json(

@@ -7,8 +7,16 @@ import { Role } from '@/lib/constants'
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Create a fresh Prisma client instance
-const prismaClient = new PrismaClient();
+// Create a global variable for PrismaClient to enable connection reuse
+let prisma: PrismaClient;
+
+// Initialize PrismaClient lazily to avoid multiple instances in development
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 // GET user details
 export async function GET() {
@@ -93,6 +101,8 @@ export async function PUT(request: Request) {
         { status: 400 }
       )
     }
+    
+    const prismaClient = getPrismaClient();
     
     // Check if this is a Google user - more reliable detection
     // Fetch user from database first to check

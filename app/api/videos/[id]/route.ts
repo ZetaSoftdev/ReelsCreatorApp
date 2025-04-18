@@ -5,8 +5,16 @@ import { PrismaClient } from '@prisma/client';
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Create a fresh Prisma client instance
-const prismaClient = new PrismaClient();
+// Create a global variable for PrismaClient to enable connection reuse
+let prisma: PrismaClient;
+
+// Initialize PrismaClient lazily to avoid multiple instances in development
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 // DELETE request handler
 export async function DELETE(
@@ -26,6 +34,9 @@ export async function DELETE(
     }
 
     const videoId = params.id;
+    
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
     
     // Check if video exists
     const video = await prismaClient.video.findUnique({
