@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPrismaClient } from '@/lib/railway-prisma';
+import prisma from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 import bcrypt from "bcryptjs";
 
@@ -45,14 +45,11 @@ export async function GET(request: NextRequest) {
     // Build sort options
     const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
-
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
     
     try {
       // Query users with pagination and filtering
       const [users, totalUsers] = await Promise.all([
-        prismaClient.user.findMany({
+        prisma.user.findMany({
           where,
           orderBy,
           skip,
@@ -72,11 +69,11 @@ export async function GET(request: NextRequest) {
             },
           },
         }),
-        prismaClient.user.count({ where }),
+        prisma.user.count({ where }),
       ]);
 
       // Get role distribution data
-      const usersByRole = await prismaClient.user.groupBy({
+      const usersByRole = await prisma.user.groupBy({
         by: ["role"],
         _count: {
           role: true,
@@ -84,7 +81,7 @@ export async function GET(request: NextRequest) {
       });
 
       // Get subscription stats
-      const subscriptionStats = await prismaClient.subscription.groupBy({
+      const subscriptionStats = await prisma.subscription.groupBy({
         by: ["status"],
         _count: {
           status: true,
@@ -162,12 +159,9 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
       // Check if user with email already exists
-      const existingUser = await prismaClient.user.findUnique({
+      const existingUser = await prisma.user.findUnique({
         where: { email },
       });
       
@@ -182,7 +176,7 @@ export async function POST(request: NextRequest) {
       const hashedPassword = await bcrypt.hash(password, 10);
       
       // Create the user
-      const newUser = await prismaClient.user.create({
+      const newUser = await prisma.user.create({
         data: {
           name,
           email,

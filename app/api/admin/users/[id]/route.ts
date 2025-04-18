@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient } from '@/lib/railway-prisma';
+import prisma from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -37,12 +37,9 @@ export async function GET(
 
     const userId = params.params.id;
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
       // Fetch user details with subscription and videos
-      const user = await prismaClient.user.findUnique({
+      const user = await prisma.user.findUnique({
         where: {
           id: userId,
         },
@@ -108,12 +105,9 @@ export async function PATCH(
       });
     }
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
       // Update user in database
-      const updatedUser = await prismaClient.user.update({
+      const updatedUser = await prisma.user.update({
         where: {
           id: userId,
         },
@@ -171,12 +165,9 @@ export async function DELETE(
       });
     }
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
       // Delete user
-      await prismaClient.user.delete({
+      await prisma.user.delete({
         where: {
           id: userId,
         },
