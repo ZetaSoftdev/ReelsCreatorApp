@@ -5,28 +5,32 @@ import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
 import { getPrismaClient } from '@/lib/railway-prisma'
 
-// Specify nodejs runtime for Prisma to work properly
+// Force Node.js runtime for Prisma
 export const runtime = 'nodejs';
 
 // GET user details
 export async function GET() {
   try {
+    console.log("GET /api/user: Starting request");
+    
     // Get the user's session
     const session = await auth()
     
     if (!session || !session.user) {
+      console.log("GET /api/user: No authenticated user");
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
     
-    console.log("GET user API called for:", session.user.email);
+    console.log("GET /api/user: Fetching data for:", session.user.email);
 
     // Sync user data between session and database
     const userData = await syncUserData(session);
     
     if (!userData) {
+      console.log("GET /api/user: User data sync failed, using fallback");
       // If sync failed, try to return basic session data as fallback
       if (session.user.email) {
         return NextResponse.json({
@@ -44,10 +48,11 @@ export async function GET() {
       )
     }
 
+    console.log("GET /api/user: Successfully fetched user data");
     // Return the synced user data
     return NextResponse.json(userData)
   } catch (error) {
-    console.error('Error fetching user:', error)
+    console.error('GET /api/user: Error fetching user:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
