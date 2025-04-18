@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -25,6 +25,9 @@ export async function GET(request: Request) {
   }
   
   try {
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prisma = getPrismaClient();
+    
     // Parse query parameters
     const page = parseInt(url.searchParams.get('page') || '1');
     const pageSize = parseInt(url.searchParams.get('pageSize') || '10');
@@ -174,6 +177,9 @@ export async function PATCH(request: Request) {
   }
   
   try {
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prisma = getPrismaClient();
+    
     const data = await request.json();
     
     // Validate required fields
@@ -249,6 +255,9 @@ export async function DELETE(request: Request) {
   }
   
   try {
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prisma = getPrismaClient();
+    
     // Check if video exists
     const video = await prisma.video.findUnique({
       where: { id }
@@ -260,7 +269,7 @@ export async function DELETE(request: Request) {
       });
     }
     
-    // Delete the video
+    // Delete video
     await prisma.video.delete({
       where: { id }
     });

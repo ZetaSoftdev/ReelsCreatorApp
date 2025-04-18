@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 import bcrypt from "bcryptjs";
 
@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
     const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
 
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Query users with pagination and filtering
@@ -91,9 +91,6 @@ export async function GET(request: NextRequest) {
         },
       });
       
-      // Disconnect client after use
-      await prismaClient.$disconnect();
-
       // Calculate total pages
       const totalPages = Math.ceil(totalUsers / pageSize);
 
@@ -114,8 +111,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json(response);
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error) {
@@ -167,8 +162,8 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Check if user with email already exists
@@ -177,7 +172,6 @@ export async function POST(request: NextRequest) {
       });
       
       if (existingUser) {
-        await prismaClient.$disconnect();
         return NextResponse.json(
           { error: "User with this email already exists" },
           { status: 409 }
@@ -204,13 +198,8 @@ export async function POST(request: NextRequest) {
         },
       });
       
-      // Disconnect client after use
-      await prismaClient.$disconnect();
-      
       return NextResponse.json(newUser, { status: 201 });
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error) {

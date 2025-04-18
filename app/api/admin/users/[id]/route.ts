@@ -1,21 +1,10 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
-
-// Create a global variable for PrismaClient to enable connection reuse
-let prisma: PrismaClient;
-
-// Initialize PrismaClient lazily to avoid multiple instances in development
-function getPrismaClient() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 // Define the Params type
 type Params = {
@@ -48,7 +37,7 @@ export async function GET(
 
     const userId = params.params.id;
     
-    // Get PrismaClient instance
+    // Get PrismaClient instance from our Railway-specific implementation
     const prismaClient = getPrismaClient();
     
     try {
@@ -119,7 +108,7 @@ export async function PATCH(
       });
     }
     
-    // Get PrismaClient instance
+    // Get PrismaClient instance from our Railway-specific implementation
     const prismaClient = getPrismaClient();
     
     try {
@@ -182,7 +171,7 @@ export async function DELETE(
       });
     }
     
-    // Get PrismaClient instance
+    // Get PrismaClient instance from our Railway-specific implementation
     const prismaClient = getPrismaClient();
     
     try {
