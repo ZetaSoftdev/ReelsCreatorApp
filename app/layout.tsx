@@ -20,27 +20,35 @@ export const metadata: Metadata = {
   description: "Video editing web application",
 };
 
+// Default branding settings used during build
+const defaultBranding = {
+  siteName: 'Reels Creator',
+  faviconUrl: '/branding/favicon.png',
+  primaryColor: '#8B5CF6',
+  accentColor: '#F59E0B',
+  defaultFont: 'Poppins'
+};
+
 // Add a function to fetch branding settings
 async function getBrandingSettings() {
+  // During build time, always return default values without fetching
+  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'build') {
+    return defaultBranding;
+  }
+  
   try {
-    // Skip API calls during build time to avoid ECONNREFUSED and timeouts
-    if (process.env.NEXT_PHASE === 'build') {
-      console.log('Skipping branding API call during build phase');
-      // Return default values directly instead of making API call
-      return {
-        siteName: 'Reels Creator',
-        faviconUrl: '/branding/favicon.png',
-        primaryColor: '#8B5CF6',
-        accentColor: '#F59E0B',
-        defaultFont: 'Poppins'
-      };
+    // For runtime/client-side, only run in browser environment
+    if (typeof window === 'undefined') {
+      return defaultBranding;
     }
     
-    // Add a cache-busting timestamp to ensure we get fresh data
-    const timestamp = Date.now();
-    const response = await fetch(`/api/branding?t=${timestamp}`, { 
-      cache: 'no-store',
-      next: { revalidate: 0 }
+    // Get the origin for the absolute URL
+    const origin = window.location.origin;
+    const url = `${origin}/api/branding`;
+    
+    const response = await fetch(url, { 
+      cache: 'force-cache',
+      next: { revalidate: 60 } // Revalidate every minute
     });
     
     if (!response.ok) {
@@ -51,10 +59,7 @@ async function getBrandingSettings() {
     
   } catch (error) {
     console.error("Error in getBrandingSettings:", error);
-    return {
-      siteName: 'Reels Creator',
-      faviconUrl: '/branding/favicon.png'
-    };
+    return defaultBranding;
   }
 }
 
@@ -63,10 +68,13 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  // Fetch branding settings
-  const brandingSettings = await getBrandingSettings();
-  const siteName = brandingSettings?.siteName || 'Reels Creator';
-  const faviconUrl = brandingSettings?.faviconUrl || '/favicon.ico';
+  // In build/SSG context, use default branding
+  const brandingSettings = process.env.NEXT_PHASE === 'build' 
+    ? defaultBranding 
+    : await getBrandingSettings();
+  
+  const siteName = brandingSettings?.siteName || defaultBranding.siteName;
+  const faviconUrl = brandingSettings?.faviconUrl || defaultBranding.faviconUrl;
   
   return (
     <html lang="en">
