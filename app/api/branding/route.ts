@@ -1,24 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
 import { auth } from "@/auth";
 import { Role } from "@/lib/constants";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
+import { getPrismaClient } from "@/lib/railway-prisma";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
-
-// Create a global variable for PrismaClient to enable connection reuse
-let prisma: PrismaClient;
-
-// Initialize PrismaClient lazily to avoid multiple instances in development
-function getPrismaClient() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 // Default branding settings
 const defaultBranding = {
@@ -255,22 +244,25 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Prepare updated settings object
+    if (!existingSettings) {
+      console.log("No existing settings found, using defaults");
+      existingSettings = defaultBranding;
+    }
+    
+    // Prepare updated settings
     const updatedSettings = {
-      ...(existingSettings || defaultBranding),
-      siteName: siteName || existingSettings?.siteName || defaultBranding.siteName,
-      primaryColor: primaryColor || existingSettings?.primaryColor || defaultBranding.primaryColor,
-      accentColor: accentColor || existingSettings?.accentColor || defaultBranding.accentColor,
-      defaultFont: defaultFont || existingSettings?.defaultFont || defaultBranding.defaultFont,
+      siteName: siteName || existingSettings.siteName,
+      primaryColor: primaryColor || existingSettings.primaryColor,
+      accentColor: accentColor || existingSettings.accentColor,
+      defaultFont: defaultFont || existingSettings.defaultFont,
+      logoUrl: existingSettings.logoUrl,
+      faviconUrl: existingSettings.faviconUrl,
     };
     
     // Handle logo upload
-    if (logoFile) {
-      console.log("Processing logo file:", logoFile.name);
-      const logoPath = await saveFileToDisk(
-        logoFile,
-        path.join(process.cwd(), "public", "uploads", "branding")
-      );
+    if (logoFile && logoFile.size > 0) {
+      console.log("Processing logo upload");
+      const logoPath = await saveFileToDisk(logoFile, path.join(process.cwd(), "public", "uploads", "branding"));
       
       if (logoPath) {
         updatedSettings.logoUrl = logoPath;
@@ -278,100 +270,70 @@ export async function POST(req: NextRequest) {
     }
     
     // Handle favicon upload
-    if (faviconFile) {
-      console.log("Processing favicon file:", faviconFile.name);
-      const faviconPath = await saveFileToDisk(
-        faviconFile,
-        path.join(process.cwd(), "public", "uploads", "branding")
-      );
+    if (faviconFile && faviconFile.size > 0) {
+      console.log("Processing favicon upload");
+      const faviconPath = await saveFileToDisk(faviconFile, path.join(process.cwd(), "public", "uploads", "branding"));
       
       if (faviconPath) {
         updatedSettings.faviconUrl = faviconPath;
       }
     }
     
+    console.log("Updated settings:", updatedSettings);
+    
     // Save updated settings
+    let savedSettings;
+    
     if (usingFileStorage) {
-      console.log("Using file storage for branding settings");
-      
-      // Save to file
+      // Save to file if database failed earlier
       if (writeSettingsToFile(updatedSettings)) {
-        console.log("Successfully updated branding settings in file");
-        
-        // Try to sync to database anyway
-        try {
-          if (existingSettings && existingSettings.id) {
-            await prismaClient.brandingSettings.update({
-              where: { id: existingSettings.id },
-              data: updatedSettings,
-            });
-            console.log("Successfully synced file settings to database");
-          } else {
-            await prismaClient.brandingSettings.create({
-              data: updatedSettings,
-            });
-            console.log("Successfully created branding settings in database from file");
-          }
-        } catch (syncError) {
-          console.error("Error syncing file settings to database:", syncError);
-          // Continue with file storage approach
-        }
-        
-        return NextResponse.json(updatedSettings);
+        console.log("Saved updated settings to file");
+        savedSettings = updatedSettings;
       } else {
-        return new NextResponse(
-          JSON.stringify({ error: "Failed to update settings file" }),
-          { status: 500 }
-        );
+        return new NextResponse(JSON.stringify({ error: "Failed to save settings" }), {
+          status: 500,
+        });
       }
     } else {
-      console.log("Using database storage for branding settings");
-      
+      // Try to save to database
       try {
-        // Save to database
-        let result;
-        
-        if (existingSettings && existingSettings.id) {
-          // Update existing settings
-          result = await prismaClient.brandingSettings.update({
+        if (existingSettings.id) {
+          // Update existing record
+          savedSettings = await prismaClient.brandingSettings.update({
             where: { id: existingSettings.id },
             data: updatedSettings,
           });
-          
-          console.log("Successfully updated branding settings in database");
+          console.log("Updated existing settings in database");
         } else {
-          // Create new settings
-          result = await prismaClient.brandingSettings.create({
+          // Create new record
+          savedSettings = await prismaClient.brandingSettings.create({
             data: updatedSettings,
           });
-          
-          console.log("Successfully created branding settings in database");
+          console.log("Created new settings in database");
         }
+      } catch (saveError) {
+        console.error("Error saving settings to database:", saveError);
         
-        // Backup to file as well
-        writeSettingsToFile(result);
-        
-        return NextResponse.json(result);
-      } catch (dbError) {
-        console.error("Database error when saving settings:", dbError);
-        
-        // Fallback to file storage
+        // Fallback to file
         if (writeSettingsToFile(updatedSettings)) {
-          console.log("Fallback: Successfully saved settings to file");
-          return NextResponse.json(updatedSettings);
+          console.log("Saved updated settings to file as fallback");
+          savedSettings = updatedSettings;
         } else {
-          return new NextResponse(
-            JSON.stringify({ error: "Failed to save settings to database or file" }),
-            { status: 500 }
-          );
+          return new NextResponse(JSON.stringify({ error: "Failed to save settings" }), {
+            status: 500,
+          });
         }
       }
     }
+    
+    return NextResponse.json({
+      success: true,
+      settings: savedSettings,
+    });
   } catch (error) {
     console.error("Error in POST /api/branding:", error);
-    return new NextResponse(
-      JSON.stringify({ error: "Internal Server Error" }),
-      { status: 500 }
-    );
+    return new NextResponse(JSON.stringify({ error: "Failed to update branding" }), {
+      status: 500,
+    });
   }
 } 
