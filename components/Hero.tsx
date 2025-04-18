@@ -97,7 +97,7 @@ const Hero = () => {
                     <div className="flex items-center gap-2">
                         <div className="p-2 bg-white rounded-full">
                             <Image 
-                                src={branding.faviconUrl || "/icon.png"} 
+                                src={branding.faviconUrl || "branding/icon.png"} 
                                 width={24} 
                                 height={24} 
                                 alt={branding.siteName} 
