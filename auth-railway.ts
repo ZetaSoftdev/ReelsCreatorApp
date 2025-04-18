@@ -1,7 +1,7 @@
 import NextAuth from 'next-auth'
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { prismaRailway as prisma } from "./lib/railway-prisma";
+import prisma from "./lib/railway-prisma";
 import bcrypt from "bcryptjs";
 import { Role } from './lib/constants';
 import { User } from 'next-auth';
