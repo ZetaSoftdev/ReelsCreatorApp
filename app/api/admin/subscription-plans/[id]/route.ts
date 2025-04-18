@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPrismaClient } from '@/lib/railway-prisma';
+import prisma from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// GET - Fetch a specific subscription plan by ID
+// GET - Fetch a single subscription plan by ID
 export async function GET(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -18,14 +18,11 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id = params.id;
+    const { id } = params;
 
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
-      // Use Prisma client instead of raw queries for better compatibility
-      const subscriptionPlan = await prismaClient.subscriptionPlan.findUnique({
+      // Find subscription plan by ID using Prisma client
+      const subscriptionPlan = await prisma.subscriptionPlan.findUnique({
         where: { id }
       });
 
@@ -51,7 +48,7 @@ export async function GET(
 
 // PUT - Update a subscription plan
 export async function PUT(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -69,49 +66,49 @@ export async function PUT(
       );
     }
 
-    const id = params.id;
-    const data = await request.json();
+    const { id } = params;
+    const data = await req.json();
 
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
+    // Prepare features array if it exists in the request data
+    const updateData: any = { ...data };
+    if (data.features) {
+      updateData.features = Array.isArray(data.features) 
+        ? data.features 
+        : [data.features];
+    }
+
+    // Convert numeric strings to numbers
+    const numericFields = [
+      'monthlyPrice', 'yearlyPrice', 'minutesAllowed', 
+      'maxFileSize', 'maxConcurrentRequests', 'storageDuration'
+    ];
     
+    numericFields.forEach(field => {
+      if (updateData[field] !== undefined) {
+        if (field === 'monthlyPrice' || field === 'yearlyPrice') {
+          updateData[field] = parseFloat(updateData[field]);
+        } else {
+          updateData[field] = parseInt(updateData[field]);
+        }
+      }
+    });
+
     try {
-      // Check if the subscription plan exists
-      const existingPlan = await prismaClient.subscriptionPlan.findUnique({
-        where: { id }
+      // Update subscription plan using Prisma client
+      const updatedPlan = await prisma.subscriptionPlan.update({
+        where: { id },
+        data: updateData
       });
 
-      if (!existingPlan) {
+      return NextResponse.json({ subscriptionPlan: updatedPlan });
+    } catch (dbError: any) {
+      // Check if it's a record not found error
+      if (dbError.code === 'P2025') {
         return NextResponse.json(
           { error: "Subscription plan not found" },
           { status: 404 }
         );
       }
-
-      // Update all fields in a single operation using Prisma client
-      const updatedPlan = await prismaClient.subscriptionPlan.update({
-        where: { id },
-        data: {
-          ...(data.name !== undefined && { name: data.name }),
-          ...(data.description !== undefined && { description: data.description }),
-          ...(data.monthlyPrice !== undefined && { monthlyPrice: parseFloat(data.monthlyPrice) }),
-          ...(data.yearlyPrice !== undefined && { yearlyPrice: parseFloat(data.yearlyPrice) }),
-          ...(data.features !== undefined && { 
-            features: Array.isArray(data.features) ? data.features : [data.features] 
-          }),
-          ...(data.minutesAllowed !== undefined && { minutesAllowed: parseInt(data.minutesAllowed) }),
-          ...(data.maxFileSize !== undefined && { maxFileSize: parseInt(data.maxFileSize) }),
-          ...(data.maxConcurrentRequests !== undefined && { 
-            maxConcurrentRequests: parseInt(data.maxConcurrentRequests) 
-          }),
-          ...(data.storageDuration !== undefined && { storageDuration: parseInt(data.storageDuration) }),
-          ...(data.isActive !== undefined && { isActive: data.isActive }),
-          updatedAt: new Date()
-        }
-      });
-
-      return NextResponse.json({ subscriptionPlan: updatedPlan });
-    } catch (dbError) {
       throw dbError;
     }
   } catch (error: any) {
@@ -125,7 +122,7 @@ export async function PUT(
 
 // DELETE - Delete a subscription plan
 export async function DELETE(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -143,37 +140,25 @@ export async function DELETE(
       );
     }
 
-    const id = params.id;
+    const { id } = params;
 
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
-      // Check if the subscription plan has active subscriptions
-      const activeSubscriptionsCount = await prismaClient.subscription.count({
-        where: {
-          planId: id,
-          status: 'active'
-        }
-      });
-
-      if (activeSubscriptionsCount > 0) {
-        return NextResponse.json(
-          { error: "Cannot delete a subscription plan with active subscriptions" },
-          { status: 400 }
-        );
-      }
-
-      // Delete the subscription plan using Prisma client
-      await prismaClient.subscriptionPlan.delete({
+      // Delete subscription plan using Prisma client
+      await prisma.subscriptionPlan.delete({
         where: { id }
       });
 
       return NextResponse.json(
-        { message: "Subscription plan deleted successfully" },
-        { status: 200 }
+        { message: "Subscription plan deleted successfully" }
       );
-    } catch (dbError) {
+    } catch (dbError: any) {
+      // Check if it's a record not found error
+      if (dbError.code === 'P2025') {
+        return NextResponse.json(
+          { error: "Subscription plan not found" },
+          { status: 404 }
+        );
+      }
       throw dbError;
     }
   } catch (error: any) {

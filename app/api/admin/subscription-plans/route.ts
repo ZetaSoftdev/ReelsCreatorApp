@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPrismaClient } from '@/lib/railway-prisma';
+import prisma from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -14,13 +14,10 @@ export async function GET() {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
     
     try {
       // Use Prisma client model queries instead of raw SQL
-      const subscriptionPlans = await prismaClient.subscriptionPlan.findMany({
+      const subscriptionPlans = await prisma.subscriptionPlan.findMany({
         orderBy: {
           monthlyPrice: 'asc'
         }
@@ -84,12 +81,9 @@ export async function POST(req: Request) {
     // Prepare data
     const features = Array.isArray(data.features) ? data.features : [data.features];
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     try {
       // Create subscription plan using Prisma client
-      const subscriptionPlan = await prismaClient.subscriptionPlan.create({
+      const subscriptionPlan = await prisma.subscriptionPlan.create({
         data: {
           name: data.name,
           description: data.description,
