@@ -1,36 +1,29 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
-import { getPrismaClient } from '@/lib/railway-prisma'
-
-// Force Node.js runtime for Prisma
-export const runtime = 'nodejs';
 
 // GET user details
 export async function GET() {
   try {
-    console.log("GET /api/user: Starting request");
-    
     // Get the user's session
     const session = await auth()
     
     if (!session || !session.user) {
-      console.log("GET /api/user: No authenticated user");
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       )
     }
     
-    console.log("GET /api/user: Fetching data for:", session.user.email);
+    console.log("GET user API called for:", session.user.email);
 
     // Sync user data between session and database
     const userData = await syncUserData(session);
     
     if (!userData) {
-      console.log("GET /api/user: User data sync failed, using fallback");
       // If sync failed, try to return basic session data as fallback
       if (session.user.email) {
         return NextResponse.json({
@@ -48,11 +41,10 @@ export async function GET() {
       )
     }
 
-    console.log("GET /api/user: Successfully fetched user data");
     // Return the synced user data
     return NextResponse.json(userData)
   } catch (error) {
-    console.error('GET /api/user: Error fetching user:', error)
+    console.error('Error fetching user:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -97,11 +89,9 @@ export async function PUT(request: Request) {
       )
     }
     
-    const prismaClient = getPrismaClient();
-    
     // Check if this is a Google user - more reliable detection
     // Fetch user from database first to check
-    let existingUser = await prismaClient.user.findUnique({
+    let existingUser = await prisma.user.findUnique({
       where: {
         email: session.user.email || ''
       }
@@ -138,7 +128,7 @@ export async function PUT(request: Request) {
     // Try to find the user by ID as a fallback
     if (!existingUser) {
       console.log("Looking for user in database with id:", session.user.id);
-      existingUser = await prismaClient.user.findUnique({
+      existingUser = await prisma.user.findUnique({
         where: {
           id: session.user.id
         }
@@ -154,7 +144,7 @@ export async function PUT(request: Request) {
     if (!existingUser && session.user.email) {
       console.log("Creating new user in database");
       try {
-        const newUser = await prismaClient.user.create({
+        const newUser = await prisma.user.create({
           data: {
             id: session.user.id,
             name: data.name || session.user.name || '',
@@ -226,7 +216,7 @@ export async function PUT(request: Request) {
     try {
       console.log("Updating user with data:", updateData);
       // Update the user in the database
-      const updatedUser = await prismaClient.user.update({
+      const updatedUser = await prisma.user.update({
         where: {
           id: existingUser.id
         },
@@ -243,27 +233,33 @@ export async function PUT(request: Request) {
         updated: true
       });
     } catch (updateError) {
-      console.error("Error updating user:", updateError);
+      console.error('Error updating user:', updateError);
       
-      // For Prisma errors, format nicely
+      // Handle Prisma errors (like unique constraint violations)
       if (updateError instanceof Prisma.PrismaClientKnownRequestError) {
-        // The .code property can be accessed in a type-safe way
         if (updateError.code === 'P2002') {
           return NextResponse.json(
             { error: 'This email is already in use' },
             { status: 400 }
           );
         }
+        
+        return NextResponse.json(
+          { error: `Database error: ${updateError.message}` },
+          { status: 500 }
+        );
       }
       
-      // Generic error response
+      // For other types of errors
       return NextResponse.json(
-        { error: 'Failed to update user' },
+        { error: 'Failed to update user profile' },
         { status: 500 }
       );
     }
   } catch (error) {
-    console.error('Error updating user:', error);
+    // Final catch-all error handler
+    console.error('Error in user update API:', error);
+    
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

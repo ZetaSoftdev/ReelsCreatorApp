@@ -1,333 +1,367 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { writeFile } from 'fs/promises';
+import { mkdir, access, constants } from 'fs/promises';
+import path from 'path';
+import fs from 'fs/promises';
 import { auth } from "@/auth";
-import { Role } from "@/lib/constants";
-import fs from "fs";
-import path from "path";
-import { v4 as uuidv4 } from "uuid";
-import prisma from "@/lib/railway-prisma";
+import { Role } from '@/lib/constants';
 
-// Specify nodejs runtime for Prisma to work properly
-export const runtime = 'nodejs';
-
-// Default branding settings
+// Define default branding settings
 const defaultBranding = {
   siteName: "Reels Creator",
-  logoUrl: "/logo.png",
-  faviconUrl: "/favicon.ico",
-  primaryColor: "#7c3aed",
-  accentColor: "#eab308",
-  defaultFont: "Poppins",
+  logoUrl: "/branding/logo.png",
+  faviconUrl: "/branding/favicon.png",
+  primaryColor: "#8B5CF6",
+  accentColor: "#F59E0B",
+  defaultFont: "Poppins"
 };
 
-// Path for storing branding settings in a file
-const brandingFilePath = path.join(process.cwd(), "data", "branding.json");
+// Path to store settings in JSON file as fallback
+const SETTINGS_FILE_PATH = path.join(process.cwd(), 'data', 'branding-settings.json');
 
-// Helper function to ensure the directory exists
-function ensureDirectoryExists(filePath: string) {
-  const dirname = path.dirname(filePath);
-  if (!fs.existsSync(dirname)) {
-    fs.mkdirSync(dirname, { recursive: true });
+// Helper function to ensure directory exists
+async function ensureDirectoryExists(directory: string) {
+  try {
+    await access(directory, constants.F_OK);
+  } catch (error) {
+    await mkdir(directory, { recursive: true });
   }
 }
 
-// Helper function to save uploaded file to disk
-async function saveFileToDisk(
-  file: File,
-  directory: string
-): Promise<string | null> {
+// Helper function to save file to disk
+async function saveFileToDisk(file: File, directory: string, filename: string): Promise<string> {
   try {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-
-    ensureDirectoryExists(directory);
-
-    // Generate unique filename
-    const uniqueFilename = `${uuidv4()}-${file.name}`;
-    const filePath = path.join(directory, uniqueFilename);
     
-    fs.writeFileSync(filePath, buffer);
+    // Ensure the directory exists
+    await ensureDirectoryExists(directory);
     
-    // Return the public URL to access the file
-    const publicPath = filePath.split("public")[1].replace(/\\/g, "/");
-    console.log("Saved file to:", filePath);
-    console.log("Public path:", publicPath);
+    // Create full file path
+    const filepath = path.join(directory, filename);
     
-    return publicPath;
+    // Write the file
+    await writeFile(filepath, buffer);
+    
+    console.log(`File saved successfully to: ${filepath}`);
+    
+    return filepath;
   } catch (error) {
-    console.error("Error saving file:", error);
-    return null;
+    console.error('Error saving file to disk:', error);
+    throw new Error('Failed to save file to disk');
   }
 }
 
-// Helper function to read settings from file
-function readSettingsFromFile(): any {
+// Helper to read settings from a JSON file
+async function readSettingsFromFile() {
   try {
-    if (fs.existsSync(brandingFilePath)) {
-      const fileContent = fs.readFileSync(brandingFilePath, "utf8");
-      return JSON.parse(fileContent);
-    }
+    await ensureDirectoryExists(path.dirname(SETTINGS_FILE_PATH));
+    const data = await fs.readFile(SETTINGS_FILE_PATH, 'utf-8');
+    return JSON.parse(data);
   } catch (error) {
-    console.error("Error reading branding settings file:", error);
+    // If file doesn't exist or is invalid, return default settings
+    return defaultBranding;
   }
-  
-  return null;
 }
 
-// Helper function to write settings to file
-function writeSettingsToFile(settings: any): boolean {
+// Helper to write settings to a JSON file
+async function writeSettingsToFile(settings: any) {
   try {
-    ensureDirectoryExists(brandingFilePath);
-    fs.writeFileSync(brandingFilePath, JSON.stringify(settings, null, 2), "utf8");
+    await ensureDirectoryExists(path.dirname(SETTINGS_FILE_PATH));
+    await fs.writeFile(SETTINGS_FILE_PATH, JSON.stringify(settings, null, 2), 'utf-8');
     return true;
   } catch (error) {
-    console.error("Error writing branding settings file:", error);
+    console.error('Error writing settings to file:', error);
     return false;
   }
 }
 
-// Helper to ensure branding settings exist (either in DB or file)
+// Function to ensure branding settings exist in database
 async function ensureBrandingSettings() {
+  console.log('Ensuring branding settings exist in database');
   try {
-    // Try to get settings from database
-    let settings = await prisma.brandingSettings.findFirst();
+    // Check if branding settings exist
+    const existingSettings = await prisma.brandingSettings.findFirst();
     
-    if (!settings) {
-      console.log("No branding settings found in database, checking file...");
-      
-      // Try to get settings from file
-      const fileSettings = readSettingsFromFile();
-      
-      if (fileSettings) {
-        console.log("Found branding settings in file");
-        
-        // Try to save file settings to database
-        try {
-          settings = await prisma.brandingSettings.create({
-            data: fileSettings,
-          });
-          console.log("Migrated file settings to database");
-        } catch (dbError) {
-          console.error("Error migrating settings to database:", dbError);
-          // Return file settings if DB save fails
-          return fileSettings;
-        }
-      } else {
-        console.log("No branding settings found in file, creating defaults");
-        
-        // Try to create default settings in database
-        try {
-          settings = await prisma.brandingSettings.create({
-            data: defaultBranding,
-          });
-          console.log("Created default branding settings in database");
-        } catch (dbError) {
-          console.error("Error creating default settings in database:", dbError);
-          
-          // If database fails, save defaults to file
-          if (writeSettingsToFile(defaultBranding)) {
-            console.log("Saved default branding settings to file");
+    if (!existingSettings) {
+      console.log('No branding settings found, creating default');
+      try {
+        await prisma.brandingSettings.create({
+          data: {
+            siteName: "Reels Creator",
+            logoUrl: "/branding/logo.png",
+            faviconUrl: "/branding/favicon.png",
+            primaryColor: "#8B5CF6",
+            accentColor: "#F59E0B",
+            defaultFont: "Poppins"
           }
-          
-          // Return default settings
-          return defaultBranding;
-        }
+        });
+        console.log('Default branding settings created');
+      } catch (error) {
+        console.error('Error creating default branding settings:', error);
+        // Fallback to file storage
+        await writeSettingsToFile({
+          siteName: "Reels Creator",
+          logoUrl: "/branding/logo.png",
+          faviconUrl: "/branding/favicon.png",
+          primaryColor: "#8B5CF6",
+          accentColor: "#F59E0B",
+          defaultFont: "Poppins"
+        });
       }
+    } else {
+      console.log('Existing branding settings found:', existingSettings.id);
     }
-    
-    return settings;
   } catch (error) {
-    console.error("Error ensuring branding settings:", error);
-    
-    // Last resort: return default settings
-    return defaultBranding;
+    console.error('Error checking branding settings:', error);
+    // Fallback to file storage if Prisma fails
+    await writeSettingsToFile(defaultBranding);
   }
 }
 
 // GET endpoint to fetch branding settings
 export async function GET() {
   try {
-    console.log("GET /api/branding - Fetching branding settings");
+    // Ensure branding settings exist
+    await ensureBrandingSettings();
+    
+    // Get branding settings from the database
+    let branding = null;
     
     try {
-      // Try to get settings from database
-      let settings = await prisma.brandingSettings.findFirst();
-      
-      if (!settings) {
-        console.log("No branding settings found in database, falling back to file or defaults");
-        
-        // Ensure branding settings exist somewhere
-        settings = await ensureBrandingSettings();
-      }
-      
-      return NextResponse.json(settings);
-    } catch (dbError) {
-      console.error("Database error when fetching branding settings:", dbError);
-      
-      // Try fallback to file
-      const fileSettings = readSettingsFromFile();
-      
-      if (fileSettings) {
-        return NextResponse.json(fileSettings);
-      }
-      
-      // Last resort: return default settings
+      branding = await prisma.brandingSettings.findFirst();
+    } catch (error) {
+      console.error('Error accessing branding settings from database:', error);
+      // Attempt to read from file storage as fallback
+      branding = await readSettingsFromFile();
+    }
+    
+    // If no branding settings exist, return default values
+    if (!branding) {
       return NextResponse.json(defaultBranding);
     }
+    
+    // Return the branding settings
+    return NextResponse.json(branding);
   } catch (error) {
-    console.error("Error in GET /api/branding:", error);
-    return NextResponse.json(defaultBranding);
+    console.error("Error fetching branding settings:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch branding settings" },
+      { status: 500 }
+    );
   }
 }
 
 // POST endpoint to update branding settings
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    console.log("POST /api/branding - Updating branding settings");
+    console.log('Processing branding update request');
     
+    // Check authentication and authorization
     const session = await auth();
+    console.log('Session data:', JSON.stringify({
+      authenticated: !!session?.user,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      userRole: session?.user?.role
+    }));
     
-    // Check if user is authenticated
-    if (!session?.user) {
-      return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-      });
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
     }
     
-    // Check if user is an admin
-    if (session.user.role !== Role.ADMIN) {
-      return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
-        status: 403,
+    // If the user already has ADMIN role in the session, we can skip the database check
+    if (session.user.role === Role.ADMIN) {
+      console.log('User is already authenticated as admin in session');
+    } else {
+      console.log('User role in session is not admin, checking database...');
+      
+      // Get user from database to check role
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
       });
+      
+      console.log('User from database:', JSON.stringify({
+        id: user?.id,
+        email: user?.email,
+        role: user?.role, 
+        roleType: typeof user?.role
+      }));
+      
+      // Make sure user is an admin - debug the actual value comparison
+      if (!user) {
+        console.log('User not found in database');
+        return NextResponse.json(
+          { error: "Forbidden: User not found" },
+          { status: 403 }
+        );
+      }
+      
+      // Check if role is admin using a more robust comparison
+      const roleStr = String(user.role);
+      const isAdmin = roleStr === Role.ADMIN || roleStr === 'ADMIN';
+      
+      console.log(`Role check details:`, {
+        userRoleActual: roleStr,
+        roleEnumAdmin: Role.ADMIN,
+        comparisonResult: isAdmin
+      });
+      
+      if (!isAdmin) {
+        return NextResponse.json(
+          { error: "Forbidden: Admin access required" },
+          { status: 403 }
+        );
+      }
     }
     
-    // Parse form data
-    const formData = await req.formData();
+    // Ensure directory exists first
+    const brandingDirectory = path.join(process.cwd(), 'public', 'branding');
+    await ensureDirectoryExists(brandingDirectory);
+    console.log('Ensured branding directory exists:', brandingDirectory);
     
-    // Extract form values
-    const siteName = formData.get("siteName") as string;
-    const primaryColor = formData.get("primaryColor") as string;
-    const accentColor = formData.get("accentColor") as string;
-    const defaultFont = formData.get("defaultFont") as string;
-    const logoFile = formData.get("logo") as File || null;
-    const faviconFile = formData.get("favicon") as File || null;
+    const formData = await request.formData();
     
-    console.log("Received form data:", {
+    // Log received form data
+    console.log('Received form fields:', Array.from(formData.keys()));
+    
+    const siteName = formData.get('siteName') as string;
+    const primaryColor = formData.get('primaryColor') as string;
+    const accentColor = formData.get('accentColor') as string;
+    const defaultFont = formData.get('defaultFont') as string;
+    
+    console.log('Text fields:', { siteName, primaryColor, accentColor, defaultFont });
+    
+    const logoFile = formData.get('logo') as File | null;
+    const faviconFile = formData.get('favicon') as File | null;
+    
+    if (logoFile) {
+      console.log('Logo file received:', logoFile.name, logoFile.size, 'bytes');
+    }
+    
+    if (faviconFile) {
+      console.log('Favicon file received:', faviconFile.name, faviconFile.size, 'bytes');
+    }
+    
+    // First, ensure branding settings exist
+    await ensureBrandingSettings();
+    
+    // Try to use Prisma first
+    let brandingSettings;
+    let brandingId;
+    let usePrisma = false;
+    
+    try {
+      const existingSettings = await prisma.brandingSettings.findFirst();
+      if (existingSettings) {
+        usePrisma = true;
+        brandingSettings = existingSettings;
+        brandingId = existingSettings.id;
+        console.log('Found existing branding settings with ID:', brandingId);
+      }
+    } catch (error) {
+      console.error('Error accessing Prisma model, using file storage:', error);
+      brandingSettings = await readSettingsFromFile();
+    }
+
+    const updateData: any = {
       siteName,
       primaryColor,
       accentColor,
-      defaultFont,
-      logoFile: logoFile ? logoFile.name : null,
-      faviconFile: faviconFile ? faviconFile.name : null,
-    });
-    
-    // Get existing settings
-    let existingSettings;
-    let usingFileStorage = false;
-    
-    try {
-      existingSettings = await prisma.brandingSettings.findFirst();
-    } catch (dbError) {
-      console.error("Database error when fetching existing settings:", dbError);
-      
-      // Try fallback to file
-      existingSettings = readSettingsFromFile();
-      usingFileStorage = true;
-      
-      if (!existingSettings) {
-        existingSettings = defaultBranding;
-      }
-    }
-    
-    if (!existingSettings) {
-      console.log("No existing settings found, using defaults");
-      existingSettings = defaultBranding;
-    }
-    
-    // Prepare updated settings
-    const updatedSettings = {
-      siteName: siteName || existingSettings.siteName,
-      primaryColor: primaryColor || existingSettings.primaryColor,
-      accentColor: accentColor || existingSettings.accentColor,
-      defaultFont: defaultFont || existingSettings.defaultFont,
-      logoUrl: existingSettings.logoUrl,
-      faviconUrl: existingSettings.faviconUrl,
+      defaultFont
     };
     
-    // Handle logo upload
+    // Process logo if provided
     if (logoFile && logoFile.size > 0) {
-      console.log("Processing logo upload");
-      const logoPath = await saveFileToDisk(logoFile, path.join(process.cwd(), "public", "uploads", "branding"));
-      
-      if (logoPath) {
-        updatedSettings.logoUrl = logoPath;
-      }
-    }
-    
-    // Handle favicon upload
-    if (faviconFile && faviconFile.size > 0) {
-      console.log("Processing favicon upload");
-      const faviconPath = await saveFileToDisk(faviconFile, path.join(process.cwd(), "public", "uploads", "branding"));
-      
-      if (faviconPath) {
-        updatedSettings.faviconUrl = faviconPath;
-      }
-    }
-    
-    console.log("Updated settings:", updatedSettings);
-    
-    // Save updated settings
-    let savedSettings;
-    
-    if (usingFileStorage) {
-      // Save to file if database failed earlier
-      if (writeSettingsToFile(updatedSettings)) {
-        console.log("Saved updated settings to file");
-        savedSettings = updatedSettings;
-      } else {
-        return new NextResponse(JSON.stringify({ error: "Failed to save settings" }), {
-          status: 500,
-        });
-      }
-    } else {
-      // Try to save to database
       try {
-        if (existingSettings.id) {
-          // Update existing record
-          savedSettings = await prisma.brandingSettings.update({
-            where: { id: existingSettings.id },
-            data: updatedSettings,
-          });
-          console.log("Updated existing settings in database");
-        } else {
-          // Create new record
-          savedSettings = await prisma.brandingSettings.create({
-            data: updatedSettings,
-          });
-          console.log("Created new settings in database");
-        }
-      } catch (saveError) {
-        console.error("Error saving settings to database:", saveError);
+        const fileExtension = logoFile.name.split('.').pop();
+        const logoFilename = `logo_${Date.now()}.${fileExtension}`;
         
-        // Fallback to file
-        if (writeSettingsToFile(updatedSettings)) {
-          console.log("Saved updated settings to file as fallback");
-          savedSettings = updatedSettings;
-        } else {
-          return new NextResponse(JSON.stringify({ error: "Failed to save settings" }), {
-            status: 500,
+        // Save file to disk
+        const logoPath = await saveFileToDisk(logoFile, brandingDirectory, logoFilename);
+        
+        // Update with new logo info
+        updateData.logoUrl = `/branding/${logoFilename}`;
+        updateData.logoPath = logoPath;
+        
+        console.log(`Logo saved: ${logoPath}`);
+      } catch (error) {
+        console.error('Error processing logo file:', error);
+      }
+    } else if (brandingSettings?.logoUrl) {
+      // Keep existing logo if present
+      updateData.logoUrl = brandingSettings.logoUrl;
+      updateData.logoPath = brandingSettings.logoPath;
+    }
+    
+    // Process favicon if provided
+    if (faviconFile && faviconFile.size > 0) {
+      try {
+        const fileExtension = faviconFile.name.split('.').pop();
+        const faviconFilename = `favicon_${Date.now()}.${fileExtension}`;
+        
+        // Save file to disk
+        const faviconPath = await saveFileToDisk(faviconFile, brandingDirectory, faviconFilename);
+        
+        // Update with new favicon info
+        updateData.faviconUrl = `/branding/${faviconFilename}`;
+        updateData.faviconPath = faviconPath;
+        
+        console.log(`Favicon saved: ${faviconPath}`);
+      } catch (error) {
+        console.error('Error processing favicon file:', error);
+      }
+    } else if (brandingSettings?.faviconUrl) {
+      // Keep existing favicon if present
+      updateData.faviconUrl = brandingSettings.faviconUrl;
+      updateData.faviconPath = brandingSettings.faviconPath;
+    }
+    
+    console.log('Final update data:', updateData);
+    
+    // Update or create settings
+    if (usePrisma) {
+      try {
+        if (brandingId) {
+          brandingSettings = await prisma.brandingSettings.update({
+            where: { id: brandingId },
+            data: updateData
           });
+          console.log('Updated existing branding settings');
+        } else {
+          brandingSettings = await prisma.brandingSettings.create({
+            data: updateData
+          });
+          console.log('Created new branding settings');
         }
+      } catch (error) {
+        console.error('Error updating with Prisma, falling back to file storage:', error);
+        usePrisma = false;
       }
     }
     
+    // If Prisma failed or isn't available, use file storage
+    if (!usePrisma) {
+      brandingSettings = { ...updateData };
+      const writeResult = await writeSettingsToFile(brandingSettings);
+      console.log('Wrote settings to file, result:', writeResult);
+    }
+    
+    // Return success
     return NextResponse.json({
       success: true,
-      settings: savedSettings,
+      message: "Branding settings updated successfully",
+      data: brandingSettings
     });
   } catch (error) {
-    console.error("Error in POST /api/branding:", error);
-    return new NextResponse(JSON.stringify({ error: "Failed to update branding" }), {
-      status: 500,
-    });
+    console.error("Error updating branding settings:", error);
+    return NextResponse.json(
+      { error: "Failed to update branding settings", details: (error as Error).message },
+      { status: 500 }
+    );
   }
 } 

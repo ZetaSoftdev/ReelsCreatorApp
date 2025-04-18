@@ -1,13 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import prisma from '@/lib/railway-prisma'
+import { prisma } from '@/lib/prisma'
 import { writeFile } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
 import fs from 'fs/promises'
-
-// Specify nodejs runtime for Prisma to work properly
-export const runtime = 'nodejs';
 
 // POST endpoint to handle image uploads
 export async function POST(request: Request) {

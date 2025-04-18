@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "./generated/client"
 }
 
 datasource db {
@@ -22,36 +21,17 @@ model User {
 }
 
 model Subscription {
-  id                   String           @id @default(cuid())
-  userId               String           @unique
+  id                   String    @id @default(cuid())
+  userId               String    @unique
   plan                 String
   status               String
-  startDate            DateTime         @default(now())
+  startDate            DateTime  @default(now())
   endDate              DateTime?
   minutesAllowed       Int
-  minutesUsed          Int              @default(0)
+  minutesUsed          Int       @default(0)
   stripeCustomerId     String?
   stripeSubscriptionId String?
-  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscriptionPlan     SubscriptionPlan? @relation(fields: [planId], references: [id])
-  planId               String?
-}
-
-model SubscriptionPlan {
-  id              String         @id @default(cuid())
-  name            String
-  description     String
-  monthlyPrice    Float
-  yearlyPrice     Float
-  features        String[]
-  minutesAllowed  Int
-  maxFileSize     Int            // In MB
-  maxConcurrentRequests Int      // Number of simultaneous requests allowed
-  storageDuration Int            // In days
-  isActive        Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  subscriptions   Subscription[]
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Video {

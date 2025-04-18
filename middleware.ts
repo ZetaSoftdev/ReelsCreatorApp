@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from './auth'
 import { Role } from './lib/constants'
 
-// Specify nodejs runtime to avoid Edge Runtime errors with bcrypt
-export const runtime = 'nodejs'
-
 // The core middleware function
 export async function middleware(request: NextRequest) {
   // Get the pathname from the URL

@@ -16,47 +16,6 @@ const nextConfig = {
   images: {
     domains: ['localhost'],
   },
-  // Add special options for Railway deployment
-  output: process.env.RAILWAY === "true" ? "standalone" : undefined,
-  
-  // Move these options to root level per Next.js 15 requirements
-  skipTrailingSlashRedirect: true,
-  skipMiddlewareUrlNormalize: true,
-  
-  // Only use bcryptjs as server-only package
-  serverExternalPackages: ['bcryptjs'],
-  
-  // Configure experimental features
-  experimental: {
-    // Correctly handle package modifiers
-    optimizePackageImports: ['@prisma/client'],
-  },
-  
-  // Configure webpack to handle Node.js modules in browser
-  webpack: (config, { isServer }) => {
-    // Handle Node.js modules in client-side code
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        path: false,
-        crypto: false,
-      };
-    }
-    
-    // Special handling for Prisma in server builds
-    if (isServer) {
-      // Prevent bundling of Prisma
-      config.externals = [...(config.externals || []), '@prisma/client', 'prisma'];
-    }
-    
-    return config;
-  },
-
-  // Set environment variables for Railway deployment
-  env: {
-    PRISMA_FORCE_NODE: process.env.RAILWAY === "true" ? "true" : undefined,
-  }
 }
 
 module.exports = nextConfig 

@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import bcrypt from 'bcryptjs'
+import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcrypt'
 import { Prisma } from '@prisma/client'
-import prisma from '@/lib/railway-prisma'
-
-// Specify nodejs runtime for Prisma to work properly
-export const runtime = 'nodejs';
 
 // Update user password
 export async function PUT(request: Request) {

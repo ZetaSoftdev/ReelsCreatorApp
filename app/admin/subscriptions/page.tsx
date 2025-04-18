@@ -33,7 +33,7 @@ import { Cross2Icon, MagnifyingGlassIcon, PlusIcon } from "@radix-ui/react-icons
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import Link from "next/link";
-import { DollarSign, CreditCard, Users, CheckCircle, XCircle, Calendar, SubscriptIcon } from "lucide-react";
+import { DollarSign, CreditCard, Users, CheckCircle, XCircle, Calendar } from "lucide-react";
 
 // Types for subscription data
 interface Subscription {
@@ -227,10 +227,10 @@ export default function SubscriptionsPage() {
     <div className="container py-10">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-medium text-gray-800">Subscription Management</h1>
-        <Link href="/admin/subscription-plans" className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-md text-white flex items-center">
-          <SubscriptIcon className="mr-2 h-4 w-4" />
-          Manage Subscription Plans
-        </Link>
+        <Button className="bg-purple-600 hover:bg-purple-700">
+          <PlusIcon className="mr-2 h-4 w-4" />
+          Add Subscription
+        </Button>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -268,12 +268,12 @@ export default function SubscriptionsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center">
-              <CheckCircle className="h-5 w-5 mr-2 text-purple-600" />
+              <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
               Active
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-purple-600">
+            <div className="text-3xl font-bold text-green-600">
               {subscriptionData?.metadata.subscriptionsByStatus.find(s => s.status === "active")?._count.status || 0}
             </div>
           </CardContent>

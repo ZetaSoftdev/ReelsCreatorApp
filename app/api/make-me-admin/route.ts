@@ -1,9 +1,6 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
-import { getPrismaClient } from '@/lib/railway-prisma';
-
-// Specify nodejs runtime for Prisma to work properly
-export const runtime = 'nodejs';
+import { prisma } from "@/lib/prisma";
 
 // POST - Make the current user an admin
 export async function POST(req: NextRequest) {
@@ -29,11 +26,8 @@ export async function POST(req: NextRequest) {
     
     console.log(`Attempting to make user with ID ${userId} an admin`);
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    const prismaClient = getPrismaClient();
-    
     // Update user role to ADMIN
-    const updatedUser = await prismaClient.user.update({
+    const updatedUser = await prisma.user.update({
       where: {
         id: userId,
       },
