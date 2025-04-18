@@ -3,6 +3,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // GET - Fetch all subscription plans
 export async function GET() {
   try {
@@ -12,10 +15,12 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Use prisma.$queryRaw to access the table directly since the model may not be properly generated yet
-    const subscriptionPlans = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" ORDER BY "monthlyPrice" ASC
-    `;
+    // Use Prisma client model queries instead of raw SQL
+    const subscriptionPlans = await prisma.subscriptionPlan.findMany({
+      orderBy: {
+        monthlyPrice: 'asc'
+      }
+    });
 
     return NextResponse.json({ subscriptionPlans });
   } catch (error: any) {
@@ -69,46 +74,24 @@ export async function POST(req: Request) {
       }
     }
 
-    // Prepare data for proper types
-    const name = data.name;
-    const description = data.description;
-    const monthlyPrice = parseFloat(data.monthlyPrice);
-    const yearlyPrice = parseFloat(data.yearlyPrice);
+    // Prepare data
+    const features = Array.isArray(data.features) ? data.features : [data.features];
     
-    // Ensure features is an array and create a proper SQL array
-    const featuresRaw = data.features || [];
-    const features = Array.isArray(featuresRaw) ? featuresRaw : [featuresRaw];
-    
-    const minutesAllowed = parseInt(data.minutesAllowed);
-    const maxFileSize = parseInt(data.maxFileSize);
-    const maxConcurrentRequests = parseInt(data.maxConcurrentRequests);
-    const storageDuration = parseInt(data.storageDuration);
-    const isActive = data.isActive !== undefined ? data.isActive : true;
-    
-    // First create a simple record without the features array
-    await prisma.$executeRaw`
-      INSERT INTO "SubscriptionPlan" (
-        id, name, description, "monthlyPrice", "yearlyPrice", 
-        "minutesAllowed", "maxFileSize", "maxConcurrentRequests", 
-        "storageDuration", "isActive", "createdAt", "updatedAt",
-        features
-      ) 
-      VALUES (
-        gen_random_uuid(), ${name}, ${description}, ${monthlyPrice}, ${yearlyPrice}, 
-        ${minutesAllowed}, ${maxFileSize}, ${maxConcurrentRequests}, 
-        ${storageDuration}, ${isActive}, now(), now(),
-        ${features}::text[]
-      )
-    `;
-
-    // Fetch the newly created subscription plan
-    const newPlan = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" 
-      WHERE name = ${name} AND description = ${description}
-      ORDER BY "createdAt" DESC LIMIT 1
-    `;
-
-    const subscriptionPlan = Array.isArray(newPlan) && newPlan.length > 0 ? newPlan[0] : null;
+    // Create subscription plan using Prisma client
+    const subscriptionPlan = await prisma.subscriptionPlan.create({
+      data: {
+        name: data.name,
+        description: data.description,
+        monthlyPrice: parseFloat(data.monthlyPrice),
+        yearlyPrice: parseFloat(data.yearlyPrice),
+        features: features,
+        minutesAllowed: parseInt(data.minutesAllowed),
+        maxFileSize: parseInt(data.maxFileSize),
+        maxConcurrentRequests: parseInt(data.maxConcurrentRequests),
+        storageDuration: parseInt(data.storageDuration),
+        isActive: data.isActive !== undefined ? data.isActive : true
+      }
+    });
 
     return NextResponse.json({ subscriptionPlan }, { status: 201 });
   } catch (error: any) {

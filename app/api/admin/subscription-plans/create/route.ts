@@ -3,6 +3,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // POST - Create a new subscription plan with special handling for form data
 export async function POST(req: NextRequest) {
   try {
@@ -59,27 +62,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one feature is required" }, { status: 400 });
     }
     
-    // Insert the new plan
+    // Create subscription plan using Prisma client
     try {
-      await prisma.$executeRaw`
-        INSERT INTO "SubscriptionPlan" (
-          id, name, description, "monthlyPrice", "yearlyPrice", 
-          "minutesAllowed", "maxFileSize", "maxConcurrentRequests", 
-          "storageDuration", "isActive", "createdAt", "updatedAt",
-          features
-        ) 
-        VALUES (
-          gen_random_uuid(), ${name}, ${description}, ${monthlyPrice}, ${yearlyPrice}, 
-          ${minutesAllowed}, ${maxFileSize}, ${maxConcurrentRequests}, 
-          ${storageDuration}, ${isActive}, now(), now(),
-          ${features}::text[]
-        )
-      `;
+      const newPlan = await prisma.subscriptionPlan.create({
+        data: {
+          name,
+          description,
+          monthlyPrice,
+          yearlyPrice,
+          features,
+          minutesAllowed,
+          maxFileSize,
+          maxConcurrentRequests,
+          storageDuration,
+          isActive
+        }
+      });
       
       // Return success
       return NextResponse.json({
         success: true,
-        message: "Subscription plan created successfully"
+        message: "Subscription plan created successfully",
+        plan: newPlan
       }, { status: 201 });
     } catch (dbError: any) {
       console.error("Database error creating plan:", dbError);
