@@ -25,7 +25,10 @@ const nextConfig = {
   // Configure experimental features
   experimental: {
     // Correctly handle package modifiers
-    optimizePackageImports: ['@prisma/client']
+    optimizePackageImports: ['@prisma/client'],
+    // Skip collection for problematic routes
+    skipTrailingSlashRedirect: true,
+    skipMiddlewareUrlNormalize: true,
   },
   
   // Configure webpack to handle Node.js modules in browser
@@ -40,7 +43,18 @@ const nextConfig = {
       };
     }
     
+    // Special handling for Prisma in server builds
+    if (isServer) {
+      // Prevent bundling of Prisma
+      config.externals = [...(config.externals || []), '@prisma/client', 'prisma'];
+    }
+    
     return config;
+  },
+
+  // Set environment variables for Railway deployment
+  env: {
+    PRISMA_FORCE_NODE: process.env.RAILWAY === "true" ? "true" : undefined,
   }
 }
 

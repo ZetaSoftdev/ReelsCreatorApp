@@ -7,8 +7,9 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "railway:build": "prisma generate && next build",
+    "railway:build": "node prisma-railway.js && next build",
     "railway:start": "prisma generate && next start",
+    "predeploy": "node prisma-railway.js",
     "postdeploy": "prisma migrate deploy",
     "start": "next start",
     "lint": "next lint"
