@@ -2,7 +2,7 @@
 import { GalleryThumbnails, HelpCircle, LayoutDashboard } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, useEffect } from 'react'
-import ThemeToggle from './ThemeToggle'
+// import ThemeToggle from './ThemeToggle'
 import { Role } from '@/lib/constants'
 
 const HomeHeader = ({pageName}: {pageName: string}) => {
@@ -34,7 +34,7 @@ const HomeHeader = ({pageName}: {pageName: string}) => {
           <Link href="/help" className="text-gray-500 dark:text-gray-100 hover:text-gray-700">
             <HelpCircle size={24} />
           </Link>
-          <ThemeToggle/>
+          {/* <ThemeToggle/> */}
         </div>
       </header>
   )
