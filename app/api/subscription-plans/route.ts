@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPrismaClient } from '@/lib/railway-prisma';
+import prisma from '@/lib/railway-prisma';
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
@@ -9,23 +9,10 @@ export async function GET() {
   try {
     console.log("GET /api/subscription-plans: Starting request");
     
-    // Get PrismaClient instance from our Railway-specific implementation
-    let prismaClient;
-    try {
-      prismaClient = getPrismaClient();
-      console.log("GET /api/subscription-plans: Successfully initialized Prisma client");
-    } catch (prismaInitError: any) {
-      console.error("GET /api/subscription-plans: Failed to initialize Prisma client:", prismaInitError);
-      return NextResponse.json(
-        { error: "Database connection failed", details: prismaInitError.message },
-        { status: 500 }
-      );
-    }
-    
     try {
       // Use the prisma client to fetch subscription plans
       console.log("GET /api/subscription-plans: Fetching subscription plans from database");
-      const subscriptionPlans = await prismaClient.subscriptionPlan.findMany({
+      const subscriptionPlans = await prisma.subscriptionPlan.findMany({
         where: {
           isActive: true
         },

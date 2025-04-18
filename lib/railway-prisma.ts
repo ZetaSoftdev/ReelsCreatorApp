@@ -9,31 +9,35 @@ import { PrismaClient } from '@prisma/client';
  * https://pris.ly/d/help/next-js-best-practices
  */
 
-// Setup for reliable Prisma client in Next.js environment
-const prismaClientSingleton = () => {
+// PrismaClient initialization
+const createPrismaClient = () => {
   console.log('RAILWAY-PRISMA: Creating new PrismaClient instance');
   return new PrismaClient({
-    log: ['error'],
+    log: ['error']
   });
 };
 
-// For non-production, use a global variable to avoid multiple instances
-declare global {
-  var prismaGlobal: undefined | ReturnType<typeof prismaClientSingleton>;
+// In development, we'll keep a global instance to avoid multiple connections
+// In production, we'll create a new instance for every import (which Next.js will optimize)
+let prisma: PrismaClient;
+
+// Check if we're in production
+if (process.env.NODE_ENV === 'production') {
+  // In production, create a new instance directly
+  prisma = createPrismaClient();
+} else {
+  // In development, use global to avoid too many connections
+  if (!(global as any).prisma) {
+    (global as any).prisma = createPrismaClient();
+  }
+  prisma = (global as any).prisma;
 }
 
-// For production, create a new instance every time
-// For development, reuse the existing instance if available
-const prisma = global.prismaGlobal ?? prismaClientSingleton();
-
-// Only store the instance in global in non-production
-if (process.env.NODE_ENV !== 'production') {
-  global.prismaGlobal = prisma;
-}
-
-// Simple function to get the initialized PrismaClient
-export function getPrismaClient() {
+// Helper function to get the Prisma client instance
+export function getPrismaClient(): PrismaClient {
   return prisma;
 }
 
+// Export the Prisma client as default and named exports for flexibility
+export { prisma };
 export default prisma; 
