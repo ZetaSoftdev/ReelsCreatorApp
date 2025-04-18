@@ -5,8 +5,16 @@ import { PrismaClient } from '@prisma/client';
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Create a fresh Prisma client instance
-const prismaClient = new PrismaClient();
+// Create a global variable for PrismaClient to enable connection reuse
+let prisma: PrismaClient;
+
+// Initialize PrismaClient lazily to avoid multiple instances in development
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 // POST - Make the current user an admin
 export async function POST(req: NextRequest) {
@@ -31,6 +39,9 @@ export async function POST(req: NextRequest) {
     }
     
     console.log(`Attempting to make user with ID ${userId} an admin`);
+    
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
     
     // Update user role to ADMIN
     const updatedUser = await prismaClient.user.update({

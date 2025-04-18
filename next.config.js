@@ -18,15 +18,29 @@ const nextConfig = {
   },
   // Add special options for Railway deployment
   output: process.env.RAILWAY === "true" ? "standalone" : undefined,
-  // Skip static optimization during build to avoid the URL issues
+  
+  // Only use bcryptjs as server-only package
+  serverExternalPackages: ['bcryptjs'],
+  
+  // Configure experimental features
   experimental: {
-    // Enable this only for Railway builds
-    ...(process.env.RAILWAY === "true" ? {
-      skipTrailingSlashRedirect: true,
-      skipMiddlewareUrlNormalize: true,
-      // Disable server static generation
-      disableOptimizedLoading: true
-    } : {})
+    // Correctly handle package modifiers
+    optimizePackageImports: ['@prisma/client']
+  },
+  
+  // Configure webpack to handle Node.js modules in browser
+  webpack: (config, { isServer }) => {
+    // Handle Node.js modules in client-side code
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+    }
+    
+    return config;
   }
 }
 
