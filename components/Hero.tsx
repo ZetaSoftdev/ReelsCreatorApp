@@ -98,7 +98,7 @@ const Hero = () => {
                         <div className="p-2 bg-white rounded-full">
                             <Image 
                                 // src={branding.faviconUrl || "branding/icon.png"}
-                                src="/branding/icon.png"
+                                src="/branding/favicon.png"
                                 width={24} 
                                 height={24} 
                                 alt={branding.siteName} 
