@@ -1,15 +1,21 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Specify nodejs runtime for Prisma to work properly
+export const runtime = 'nodejs';
+
 // GET - Fetch all active subscription plans for public viewing
 export async function GET() {
   try {
-    // Fetch all active subscription plans using raw SQL
-    const subscriptionPlans = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" 
-      WHERE "isActive" = true
-      ORDER BY "monthlyPrice" ASC
-    `;
+    // Directly use the Prisma client model instead of raw SQL for better compatibility
+    const subscriptionPlans = await prisma.subscriptionPlan.findMany({
+      where: {
+        isActive: true
+      },
+      orderBy: {
+        monthlyPrice: 'asc'
+      }
+    });
 
     return NextResponse.json({ subscriptionPlans });
   } catch (error: any) {

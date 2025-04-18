@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   description: "Video editing web application",
 };
 
-// Default branding settings used during build
+// Default branding settings used at build time
 const defaultBranding = {
   siteName: 'Reels Creator',
   faviconUrl: '/branding/favicon.png',
@@ -29,52 +29,16 @@ const defaultBranding = {
   defaultFont: 'Poppins'
 };
 
-// Add a function to fetch branding settings
-async function getBrandingSettings() {
-  // During build time, always return default values without fetching
-  if (process.env.NODE_ENV === 'production' && process.env.NEXT_PHASE === 'build') {
-    return defaultBranding;
-  }
-  
-  try {
-    // For runtime/client-side, only run in browser environment
-    if (typeof window === 'undefined') {
-      return defaultBranding;
-    }
-    
-    // Get the origin for the absolute URL
-    const origin = window.location.origin;
-    const url = `${origin}/api/branding`;
-    
-    const response = await fetch(url, { 
-      cache: 'force-cache',
-      next: { revalidate: 60 } // Revalidate every minute
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch branding: ${response.status}`);
-    }
-    
-    return await response.json();
-    
-  } catch (error) {
-    console.error("Error in getBrandingSettings:", error);
-    return defaultBranding;
-  }
-}
-
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // In build/SSG context, use default branding
-  const brandingSettings = process.env.NEXT_PHASE === 'build' 
-    ? defaultBranding 
-    : await getBrandingSettings();
-  
-  const siteName = brandingSettings?.siteName || defaultBranding.siteName;
-  const faviconUrl = brandingSettings?.faviconUrl || defaultBranding.faviconUrl;
+  // Always use default branding settings for build
+  // This avoids any API calls during build time that cause errors
+  // Logo context will handle runtime branding updates for clients
+  const siteName = defaultBranding.siteName;
+  const faviconUrl = defaultBranding.faviconUrl;
   
   return (
     <html lang="en">
