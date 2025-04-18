@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient();
 
 // GET - Fetch all subscription plans
 export async function GET() {
@@ -16,7 +19,7 @@ export async function GET() {
     }
 
     // Use Prisma client model queries instead of raw SQL
-    const subscriptionPlans = await prisma.subscriptionPlan.findMany({
+    const subscriptionPlans = await prismaClient.subscriptionPlan.findMany({
       orderBy: {
         monthlyPrice: 'asc'
       }
@@ -78,7 +81,7 @@ export async function POST(req: Request) {
     const features = Array.isArray(data.features) ? data.features : [data.features];
     
     // Create subscription plan using Prisma client
-    const subscriptionPlan = await prisma.subscriptionPlan.create({
+    const subscriptionPlan = await prismaClient.subscriptionPlan.create({
       data: {
         name: data.name,
         description: data.description,

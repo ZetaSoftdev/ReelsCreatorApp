@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient();
 
 // POST - Create a new subscription plan with special handling for form data
 export async function POST(req: NextRequest) {
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
     
     // Create subscription plan using Prisma client
     try {
-      const newPlan = await prisma.subscriptionPlan.create({
+      const newPlan = await prismaClient.subscriptionPlan.create({
         data: {
           name,
           description,

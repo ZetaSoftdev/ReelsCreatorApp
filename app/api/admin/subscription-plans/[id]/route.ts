@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient();
 
 // GET - Fetch a specific subscription plan by ID
 export async function GET(
@@ -21,7 +24,7 @@ export async function GET(
     const id = params.id;
 
     // Use Prisma client instead of raw queries for better compatibility
-    const subscriptionPlan = await prisma.subscriptionPlan.findUnique({
+    const subscriptionPlan = await prismaClient.subscriptionPlan.findUnique({
       where: { id }
     });
 
@@ -66,7 +69,7 @@ export async function PUT(
     const data = await request.json();
 
     // Check if the subscription plan exists
-    const existingPlan = await prisma.subscriptionPlan.findUnique({
+    const existingPlan = await prismaClient.subscriptionPlan.findUnique({
       where: { id }
     });
 
@@ -78,7 +81,7 @@ export async function PUT(
     }
 
     // Update all fields in a single operation using Prisma client
-    const updatedPlan = await prisma.subscriptionPlan.update({
+    const updatedPlan = await prismaClient.subscriptionPlan.update({
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
@@ -132,7 +135,7 @@ export async function DELETE(
     const id = params.id;
 
     // Check if the subscription plan has active subscriptions
-    const activeSubscriptionsCount = await prisma.subscription.count({
+    const activeSubscriptionsCount = await prismaClient.subscription.count({
       where: {
         planId: id,
         status: 'active'
@@ -147,7 +150,7 @@ export async function DELETE(
     }
 
     // Delete the subscription plan using Prisma client
-    await prisma.subscriptionPlan.delete({
+    await prismaClient.subscriptionPlan.delete({
       where: { id }
     });
 
