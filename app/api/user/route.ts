@@ -1,22 +1,12 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
+import { getPrismaClient } from '@/lib/railway-prisma'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
-
-// Create a global variable for PrismaClient to enable connection reuse
-let prisma: PrismaClient;
-
-// Initialize PrismaClient lazily to avoid multiple instances in development
-function getPrismaClient() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 // GET user details
 export async function GET() {
@@ -248,33 +238,27 @@ export async function PUT(request: Request) {
         updated: true
       });
     } catch (updateError) {
-      console.error('Error updating user:', updateError);
+      console.error("Error updating user:", updateError);
       
-      // Handle Prisma errors (like unique constraint violations)
+      // For Prisma errors, format nicely
       if (updateError instanceof Prisma.PrismaClientKnownRequestError) {
+        // The .code property can be accessed in a type-safe way
         if (updateError.code === 'P2002') {
           return NextResponse.json(
             { error: 'This email is already in use' },
             { status: 400 }
           );
         }
-        
-        return NextResponse.json(
-          { error: `Database error: ${updateError.message}` },
-          { status: 500 }
-        );
       }
       
-      // For other types of errors
+      // Generic error response
       return NextResponse.json(
-        { error: 'Failed to update user profile' },
+        { error: 'Failed to update user' },
         { status: 500 }
       );
     }
   } catch (error) {
-    // Final catch-all error handler
-    console.error('Error in user update API:', error);
-    
+    console.error('Error updating user:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

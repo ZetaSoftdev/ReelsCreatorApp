@@ -1,21 +1,11 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import bcrypt from 'bcryptjs'
-import { Prisma, PrismaClient } from '@prisma/client'
+import { Prisma } from '@prisma/client'
+import { getPrismaClient } from '@/lib/railway-prisma'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
-
-// Create a global variable for PrismaClient to enable connection reuse
-let prisma: PrismaClient;
-
-// Initialize PrismaClient lazily to avoid multiple instances in development
-function getPrismaClient() {
-  if (!prisma) {
-    prisma = new PrismaClient();
-  }
-  return prisma;
-}
 
 // Update user password
 export async function PUT(request: Request) {
@@ -79,7 +69,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Get PrismaClient instance
+    // Get PrismaClient instance from Railway-specific implementation
     const prismaClient = getPrismaClient();
 
     // Get the user with their password

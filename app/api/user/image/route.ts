@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { PrismaClient } from '@prisma/client'
+import { getPrismaClient } from '@/lib/railway-prisma'
 import { writeFile } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
@@ -8,9 +8,6 @@ import fs from 'fs/promises'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
-
-// Create a fresh Prisma client instance
-const prismaClient = new PrismaClient()
 
 // POST endpoint to handle image uploads
 export async function POST(request: Request) {
@@ -24,6 +21,9 @@ export async function POST(request: Request) {
         { status: 401 }
       )
     }
+
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
 
     // Parse the multipart form data
     const formData = await request.formData()
