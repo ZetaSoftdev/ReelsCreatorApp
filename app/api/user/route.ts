@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { Prisma } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Fallback to a new PrismaClient if the shared instance fails
+const getPrismaClient = () => {
+  try {
+    return prisma;
+  } catch (error) {
+    console.warn('Falling back to new PrismaClient instance');
+    return new PrismaClient();
+  }
+};
 
 // GET user details
 export async function GET() {
@@ -92,9 +102,11 @@ export async function PUT(request: Request) {
       )
     }
     
+    const prismaClient = getPrismaClient();
+    
     // Check if this is a Google user - more reliable detection
     // Fetch user from database first to check
-    let existingUser = await prisma.user.findUnique({
+    let existingUser = await prismaClient.user.findUnique({
       where: {
         email: session.user.email || ''
       }
@@ -131,7 +143,7 @@ export async function PUT(request: Request) {
     // Try to find the user by ID as a fallback
     if (!existingUser) {
       console.log("Looking for user in database with id:", session.user.id);
-      existingUser = await prisma.user.findUnique({
+      existingUser = await prismaClient.user.findUnique({
         where: {
           id: session.user.id
         }
@@ -147,7 +159,7 @@ export async function PUT(request: Request) {
     if (!existingUser && session.user.email) {
       console.log("Creating new user in database");
       try {
-        const newUser = await prisma.user.create({
+        const newUser = await prismaClient.user.create({
           data: {
             id: session.user.id,
             name: data.name || session.user.name || '',
@@ -219,7 +231,7 @@ export async function PUT(request: Request) {
     try {
       console.log("Updating user with data:", updateData);
       // Update the user in the database
-      const updatedUser = await prisma.user.update({
+      const updatedUser = await prismaClient.user.update({
         where: {
           id: existingUser.id
         },

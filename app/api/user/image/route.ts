@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { PrismaClient } from '@prisma/client'
 import { writeFile } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
 import path from 'path'
@@ -8,6 +9,16 @@ import fs from 'fs/promises'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Fallback to a new PrismaClient if the shared instance fails
+const getPrismaClient = () => {
+  try {
+    return prisma;
+  } catch (error) {
+    console.warn('Falling back to new PrismaClient instance');
+    return new PrismaClient();
+  }
+};
 
 // POST endpoint to handle image uploads
 export async function POST(request: Request) {
@@ -83,8 +94,10 @@ export async function POST(request: Request) {
     // Create the public URL
     const publicUrl = `/uploads/profiles/${filename}`
     
+    const prismaClient = getPrismaClient();
+    
     // First check if user exists in database
-    const userExists = await prisma.user.findUnique({
+    const userExists = await prismaClient.user.findUnique({
       where: {
         id: session.user.id
       }
@@ -93,7 +106,7 @@ export async function POST(request: Request) {
     // If user doesn't exist yet (Google login case), create it first
     if (!userExists) {
       try {
-        await prisma.user.create({
+        await prismaClient.user.create({
           data: {
             id: session.user.id,
             name: session.user.name || '',
@@ -112,7 +125,7 @@ export async function POST(request: Request) {
     
     try {
       // Update the user's profile image in the database
-      const updatedUser = await prisma.user.update({
+      const updatedUser = await prismaClient.user.update({
         where: {
           id: session.user.id
         },

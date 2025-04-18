@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Fallback to a new PrismaClient if the shared instance fails
+const getPrismaClient = () => {
+  try {
+    return prisma;
+  } catch (error) {
+    console.warn('Falling back to new PrismaClient instance');
+    return new PrismaClient();
+  }
+};
 
 // DELETE request handler
 export async function DELETE(
@@ -24,8 +35,10 @@ export async function DELETE(
 
     const videoId = params.id;
     
+    const prismaClient = getPrismaClient();
+    
     // Check if video exists
-    const video = await prisma.video.findUnique({
+    const video = await prismaClient.video.findUnique({
       where: { id: videoId },
     });
 
@@ -45,7 +58,7 @@ export async function DELETE(
     }
 
     // Delete the video
-    await prisma.video.delete({
+    await prismaClient.video.delete({
       where: { id: videoId },
     });
 

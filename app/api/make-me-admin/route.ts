@@ -1,9 +1,20 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Fallback to a new PrismaClient if the shared instance fails
+const getPrismaClient = () => {
+  try {
+    return prisma;
+  } catch (error) {
+    console.warn('Falling back to new PrismaClient instance');
+    return new PrismaClient();
+  }
+};
 
 // POST - Make the current user an admin
 export async function POST(req: NextRequest) {
@@ -29,8 +40,10 @@ export async function POST(req: NextRequest) {
     
     console.log(`Attempting to make user with ID ${userId} an admin`);
     
+    const prismaClient = getPrismaClient();
+    
     // Update user role to ADMIN
-    const updatedUser = await prisma.user.update({
+    const updatedUser = await prismaClient.user.update({
       where: {
         id: userId,
       },
