@@ -4,7 +4,7 @@ import { Role } from "@/lib/constants";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
-import { getPrismaClient } from "@/lib/railway-prisma";
+import prisma from "@/lib/railway-prisma";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
@@ -88,10 +88,8 @@ function writeSettingsToFile(settings: any): boolean {
 // Helper to ensure branding settings exist (either in DB or file)
 async function ensureBrandingSettings() {
   try {
-    const prismaClient = getPrismaClient();
-    
     // Try to get settings from database
-    let settings = await prismaClient.brandingSettings.findFirst();
+    let settings = await prisma.brandingSettings.findFirst();
     
     if (!settings) {
       console.log("No branding settings found in database, checking file...");
@@ -104,7 +102,7 @@ async function ensureBrandingSettings() {
         
         // Try to save file settings to database
         try {
-          settings = await prismaClient.brandingSettings.create({
+          settings = await prisma.brandingSettings.create({
             data: fileSettings,
           });
           console.log("Migrated file settings to database");
@@ -118,7 +116,7 @@ async function ensureBrandingSettings() {
         
         // Try to create default settings in database
         try {
-          settings = await prismaClient.brandingSettings.create({
+          settings = await prisma.brandingSettings.create({
             data: defaultBranding,
           });
           console.log("Created default branding settings in database");
@@ -150,11 +148,9 @@ export async function GET() {
   try {
     console.log("GET /api/branding - Fetching branding settings");
     
-    const prismaClient = getPrismaClient();
-    
     try {
       // Try to get settings from database
-      let settings = await prismaClient.brandingSettings.findFirst();
+      let settings = await prisma.brandingSettings.findFirst();
       
       if (!settings) {
         console.log("No branding settings found in database, falling back to file or defaults");
@@ -228,10 +224,8 @@ export async function POST(req: NextRequest) {
     let existingSettings;
     let usingFileStorage = false;
     
-    const prismaClient = getPrismaClient();
-    
     try {
-      existingSettings = await prismaClient.brandingSettings.findFirst();
+      existingSettings = await prisma.brandingSettings.findFirst();
     } catch (dbError) {
       console.error("Database error when fetching existing settings:", dbError);
       
@@ -299,14 +293,14 @@ export async function POST(req: NextRequest) {
       try {
         if (existingSettings.id) {
           // Update existing record
-          savedSettings = await prismaClient.brandingSettings.update({
+          savedSettings = await prisma.brandingSettings.update({
             where: { id: existingSettings.id },
             data: updatedSettings,
           });
           console.log("Updated existing settings in database");
         } else {
           // Create new record
-          savedSettings = await prismaClient.brandingSettings.create({
+          savedSettings = await prisma.brandingSettings.create({
             data: updatedSettings,
           });
           console.log("Created new settings in database");
