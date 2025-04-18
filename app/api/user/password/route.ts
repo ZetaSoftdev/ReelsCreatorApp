@@ -1,21 +1,13 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcrypt'
 import { Prisma, PrismaClient } from '@prisma/client'
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Fallback to a new PrismaClient if the shared instance fails
-const getPrismaClient = () => {
-  try {
-    return prisma;
-  } catch (error) {
-    console.warn('Falling back to new PrismaClient instance');
-    return new PrismaClient();
-  }
-};
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient();
 
 // Update user password
 export async function PUT(request: Request) {
@@ -78,8 +70,6 @@ export async function PUT(request: Request) {
         )
       }
     }
-
-    const prismaClient = getPrismaClient();
 
     // Get the user with their password
     const user = await prismaClient.user.findUnique({

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { prisma } from '@/lib/prisma'
 import { PrismaClient } from '@prisma/client'
 import { writeFile } from 'fs/promises'
 import { v4 as uuidv4 } from 'uuid'
@@ -10,15 +9,8 @@ import fs from 'fs/promises'
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Fallback to a new PrismaClient if the shared instance fails
-const getPrismaClient = () => {
-  try {
-    return prisma;
-  } catch (error) {
-    console.warn('Falling back to new PrismaClient instance');
-    return new PrismaClient();
-  }
-};
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient()
 
 // POST endpoint to handle image uploads
 export async function POST(request: Request) {
@@ -93,8 +85,6 @@ export async function POST(request: Request) {
 
     // Create the public URL
     const publicUrl = `/uploads/profiles/${filename}`
-    
-    const prismaClient = getPrismaClient();
     
     // First check if user exists in database
     const userExists = await prismaClient.user.findUnique({

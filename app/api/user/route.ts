@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
-import { prisma } from '@/lib/prisma'
 import { Prisma, PrismaClient } from '@prisma/client'
 import { syncUserData } from '@/lib/sync-user-session'
 import { Role } from '@/lib/constants'
@@ -8,15 +7,8 @@ import { Role } from '@/lib/constants'
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
 
-// Fallback to a new PrismaClient if the shared instance fails
-const getPrismaClient = () => {
-  try {
-    return prisma;
-  } catch (error) {
-    console.warn('Falling back to new PrismaClient instance');
-    return new PrismaClient();
-  }
-};
+// Create a fresh Prisma client instance
+const prismaClient = new PrismaClient();
 
 // GET user details
 export async function GET() {
@@ -101,8 +93,6 @@ export async function PUT(request: Request) {
         { status: 400 }
       )
     }
-    
-    const prismaClient = getPrismaClient();
     
     // Check if this is a Google user - more reliable detection
     // Fetch user from database first to check
