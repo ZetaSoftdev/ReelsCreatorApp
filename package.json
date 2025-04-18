@@ -6,6 +6,9 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "railway:build": "prisma generate && next build",
+    "railway:start": "prisma generate && next start",
     "postdeploy": "prisma migrate deploy",
     "start": "next start",
     "lint": "next lint"

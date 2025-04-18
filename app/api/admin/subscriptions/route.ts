@@ -1,10 +1,21 @@
 import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { PrismaClient } from '@prisma/client';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
+
+// Create a global variable for PrismaClient to enable connection reuse
+let prisma: PrismaClient;
+
+// Initialize PrismaClient lazily to avoid multiple instances in development
+function getPrismaClient() {
+  if (!prisma) {
+    prisma = new PrismaClient();
+  }
+  return prisma;
+}
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -25,6 +36,9 @@ export async function GET(request: Request) {
   }
   
   try {
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
+    
     // Parse query parameters
     const page = parseInt(url.searchParams.get('page') || '1');
     const pageSize = parseInt(url.searchParams.get('pageSize') || '10');
@@ -61,7 +75,7 @@ export async function GET(request: Request) {
     }
     
     // Count total subscriptions with filters
-    const totalSubscriptions = await prisma.subscription.count({
+    const totalSubscriptions = await prismaClient.subscription.count({
       where: filters
     });
     
@@ -69,7 +83,7 @@ export async function GET(request: Request) {
     const totalPages = Math.ceil(totalSubscriptions / pageSize);
     
     // Get subscriptions with pagination and sorting
-    const subscriptions = await prisma.subscription.findMany({
+    const subscriptions = await prismaClient.subscription.findMany({
       where: filters,
       include: {
         user: {
@@ -89,7 +103,7 @@ export async function GET(request: Request) {
     });
     
     // Get subscription counts by plan
-    const subscriptionsByPlan = await prisma.subscription.groupBy({
+    const subscriptionsByPlan = await prismaClient.subscription.groupBy({
       by: ['plan'],
       _count: {
         plan: true
@@ -97,7 +111,7 @@ export async function GET(request: Request) {
     });
     
     // Get subscription counts by status
-    const subscriptionsByStatus = await prisma.subscription.groupBy({
+    const subscriptionsByStatus = await prismaClient.subscription.groupBy({
       by: ['status'],
       _count: {
         status: true
@@ -105,7 +119,7 @@ export async function GET(request: Request) {
     });
     
     // Get total revenue
-    const revenuePipeline = await prisma.$queryRaw`
+    const revenuePipeline = await prismaClient.$queryRaw`
       SELECT SUM(CASE 
         WHEN "plan" = 'free' THEN 0
         WHEN "plan" = 'basic' THEN 9.99
@@ -118,7 +132,7 @@ export async function GET(request: Request) {
     `;
     
     // Get revenue by plan
-    const revenueByPlan = await prisma.$queryRaw`
+    const revenueByPlan = await prismaClient.$queryRaw`
       SELECT "plan", COUNT(*) as count,
       SUM(CASE 
         WHEN "plan" = 'free' THEN 0
@@ -176,6 +190,9 @@ export async function POST(request: Request) {
   }
   
   try {
+    // Get PrismaClient instance
+    const prismaClient = getPrismaClient();
+    
     const data = await request.json();
     
     // Validate required fields
@@ -186,7 +203,7 @@ export async function POST(request: Request) {
     }
     
     // Check if user exists
-    const user = await prisma.user.findUnique({
+    const user = await prismaClient.user.findUnique({
       where: { id: data.userId }
     });
     
@@ -197,7 +214,7 @@ export async function POST(request: Request) {
     }
     
     // Check if subscription exists
-    const existingSubscription = await prisma.subscription.findUnique({
+    const existingSubscription = await prismaClient.subscription.findUnique({
       where: { userId: data.userId }
     });
     
@@ -217,14 +234,14 @@ export async function POST(request: Request) {
     
     if (existingSubscription) {
       // Update existing subscription
-      subscription = await prisma.subscription.update({
+      subscription = await prismaClient.subscription.update({
         where: { userId: data.userId },
         data: subscriptionData,
         include: { user: true }
       });
     } else {
       // Create new subscription
-      subscription = await prisma.subscription.create({
+      subscription = await prismaClient.subscription.create({
         data: {
           ...subscriptionData,
           userId: data.userId
