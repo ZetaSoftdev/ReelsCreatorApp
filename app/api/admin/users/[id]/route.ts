@@ -1,7 +1,7 @@
 import { auth } from "@/auth";
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from '@prisma/client';
-import { USER_ROLES, ROLES } from "@/constants/roles";
+import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
@@ -39,8 +39,8 @@ export async function GET(
       });
     }
     
-    // Check if user is an admin
-    if (session.user.role !== USER_ROLES.ADMIN) {
+    // Check if user is an admin - compare using string value for safety
+    if (session.user.role?.toString() !== "ADMIN") {
       return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
         status: 403,
       });
@@ -60,9 +60,6 @@ export async function GET(
         include: {
           subscription: true,
           videos: {
-            orderBy: {
-              createdAt: 'desc',
-            },
             take: 5, // Limit to most recent 5 videos
           },
         },
@@ -101,8 +98,8 @@ export async function PATCH(
       });
     }
     
-    // Check if user is an admin
-    if (session.user.role !== USER_ROLES.ADMIN) {
+    // Check if user is an admin - compare using string value for safety
+    if (session.user.role?.toString() !== "ADMIN") {
       return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
         status: 403,
       });
@@ -116,7 +113,7 @@ export async function PATCH(
     // Validate role
     const { role } = body;
     
-    if (role && !ROLES.includes(role)) {
+    if (role && !Object.values(Role).includes(role as Role)) {
       return new NextResponse(JSON.stringify({ message: "Invalid role" }), {
         status: 400,
       });
@@ -169,8 +166,8 @@ export async function DELETE(
       });
     }
     
-    // Check if user is an admin
-    if (session.user.role !== USER_ROLES.ADMIN) {
+    // Check if user is an admin - compare using string value for safety
+    if (session.user.role?.toString() !== "ADMIN") {
       return new NextResponse(JSON.stringify({ message: "Forbidden: Admin access required" }), {
         status: 403,
       });
