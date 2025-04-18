@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one feature is required" }, { status: 400 });
     }
     
-    // Create Prisma client inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Create subscription plan using Prisma client
@@ -82,9 +82,6 @@ export async function POST(req: NextRequest) {
         }
       });
       
-      // Disconnect client after use
-      await prismaClient.$disconnect();
-      
       // Return success
       return NextResponse.json({
         success: true,
@@ -92,9 +89,6 @@ export async function POST(req: NextRequest) {
         plan: newPlan
       }, { status: 201 });
     } catch (dbError: any) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
-      
       console.error("Database error creating plan:", dbError);
       return NextResponse.json({
         error: "Database error creating plan",

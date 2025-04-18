@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -20,17 +20,14 @@ export async function GET(
 
     const id = params.id;
 
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Use Prisma client instead of raw queries for better compatibility
       const subscriptionPlan = await prismaClient.subscriptionPlan.findUnique({
         where: { id }
       });
-      
-      // Disconnect client after use
-      await prismaClient.$disconnect();
 
       if (!subscriptionPlan) {
         return NextResponse.json(
@@ -41,8 +38,6 @@ export async function GET(
 
       return NextResponse.json({ subscriptionPlan });
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {
@@ -77,8 +72,8 @@ export async function PUT(
     const id = params.id;
     const data = await request.json();
 
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Check if the subscription plan exists
@@ -87,7 +82,6 @@ export async function PUT(
       });
 
       if (!existingPlan) {
-        await prismaClient.$disconnect();
         return NextResponse.json(
           { error: "Subscription plan not found" },
           { status: 404 }
@@ -115,14 +109,9 @@ export async function PUT(
           updatedAt: new Date()
         }
       });
-      
-      // Disconnect client after use
-      await prismaClient.$disconnect();
 
       return NextResponse.json({ subscriptionPlan: updatedPlan });
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {
@@ -156,8 +145,8 @@ export async function DELETE(
 
     const id = params.id;
 
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Check if the subscription plan has active subscriptions
@@ -169,7 +158,6 @@ export async function DELETE(
       });
 
       if (activeSubscriptionsCount > 0) {
-        await prismaClient.$disconnect();
         return NextResponse.json(
           { error: "Cannot delete a subscription plan with active subscriptions" },
           { status: 400 }
@@ -180,17 +168,12 @@ export async function DELETE(
       await prismaClient.subscriptionPlan.delete({
         where: { id }
       });
-      
-      // Disconnect client after use
-      await prismaClient.$disconnect();
 
       return NextResponse.json(
         { message: "Subscription plan deleted successfully" },
         { status: 200 }
       );
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {

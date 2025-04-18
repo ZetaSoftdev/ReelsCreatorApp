@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 import { Role } from "@/lib/constants";
 
 // Specify nodejs runtime for Prisma to work properly
@@ -15,8 +15,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Use Prisma client model queries instead of raw SQL
@@ -25,14 +25,9 @@ export async function GET() {
           monthlyPrice: 'asc'
         }
       });
-      
-      // Disconnect client after use
-      await prismaClient.$disconnect();
 
       return NextResponse.json({ subscriptionPlans });
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {
@@ -89,8 +84,8 @@ export async function POST(req: Request) {
     // Prepare data
     const features = Array.isArray(data.features) ? data.features : [data.features];
     
-    // Create PrismaClient instance inside the function
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Create subscription plan using Prisma client
@@ -108,14 +103,9 @@ export async function POST(req: Request) {
           isActive: data.isActive !== undefined ? data.isActive : true
         }
       });
-      
-      // Disconnect client after use
-      await prismaClient.$disconnect();
 
       return NextResponse.json({ subscriptionPlan }, { status: 201 });
     } catch (dbError) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {

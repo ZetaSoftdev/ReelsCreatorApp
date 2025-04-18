@@ -19,6 +19,10 @@ const nextConfig = {
   // Add special options for Railway deployment
   output: process.env.RAILWAY === "true" ? "standalone" : undefined,
   
+  // Move these options to root level per Next.js 15 requirements
+  skipTrailingSlashRedirect: true,
+  skipMiddlewareUrlNormalize: true,
+  
   // Only use bcryptjs as server-only package
   serverExternalPackages: ['bcryptjs'],
   
@@ -26,9 +30,6 @@ const nextConfig = {
   experimental: {
     // Correctly handle package modifiers
     optimizePackageImports: ['@prisma/client'],
-    // Skip collection for problematic routes
-    skipTrailingSlashRedirect: true,
-    skipMiddlewareUrlNormalize: true,
   },
   
   // Configure webpack to handle Node.js modules in browser

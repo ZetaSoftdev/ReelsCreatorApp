@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from '@prisma/client';
+import { getPrismaClient } from '@/lib/railway-prisma';
 
 // Specify nodejs runtime for Prisma to work properly
 export const runtime = 'nodejs';
@@ -7,8 +7,8 @@ export const runtime = 'nodejs';
 // GET - Fetch all active subscription plans for public viewing
 export async function GET() {
   try {
-    // Create PrismaClient instance inside the function to avoid initialization during build
-    const prismaClient = new PrismaClient();
+    // Get PrismaClient instance from our Railway-specific implementation
+    const prismaClient = getPrismaClient();
     
     try {
       // Use the prisma client to fetch subscription plans
@@ -21,13 +21,8 @@ export async function GET() {
         }
       });
       
-      // Disconnect client after use
-      await prismaClient.$disconnect();
-      
       return NextResponse.json({ subscriptionPlans });
     } catch (dbError: any) {
-      // Make sure to disconnect even if there's an error
-      await prismaClient.$disconnect();
       throw dbError;
     }
   } catch (error: any) {
