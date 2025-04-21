@@ -106,7 +106,8 @@ export default function HomeSidebar() {
     name?: string;
     size?: number;
     progress?: number;
-  }>({ file: null, url: "", status: null });
+    error?: string | null;
+  }>({ file: null, url: "", status: null, error: null });
   const router = useRouter();
 
   // Calculate total pages - updated to work with both new and old API responses
@@ -140,7 +141,7 @@ export default function HomeSidebar() {
     setClipsList([]);
     setSubtitlesList([]);
     setProcessedClips([]);
-    setUploadedVideo({ file: null, url: "", status: null });
+    setUploadedVideo({ file: null, url: "", status: null, error: null });
     setCurrentPage(1);
     setJobId(null);
     setJobProgress(0);
@@ -245,61 +246,33 @@ export default function HomeSidebar() {
     };
   }, []);
 
-  // Poll for job status
-  const startPollingJobStatus = useCallback((id: string) => {
-    // Clear any existing interval
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-    }
-    
-    console.log("Starting to poll job status for:", id);
-    
-    // Start new polling interval
-    pollingIntervalRef.current = setInterval(async () => {
-      try {
-        const response = await getJobStatus(id);
-        const statusData = await response.json();
-        console.log("Job status:", statusData);
-        
-        if (statusData.status === "processing") {
-          // Update progress
-          setJobProgress(statusData.progress || 0);
-          setUploadedVideo(prev => ({ 
-            ...prev, 
-            status: "processing",
-            progress: statusData.progress || 0
-          }));
-          setUploadStatus(`Processing: ${Math.round(statusData.progress || 0)}% complete`);
-        } 
-        else if (statusData.status === "completed") {
-          // Job completed, get details
-          console.log("Job completed, fetching details");
-          clearInterval(pollingIntervalRef.current!);
-          pollingIntervalRef.current = null;
-          await fetchJobDetails(id);
-        } 
-        else if (statusData.status === "failed") {
-          // Job failed
-          console.error("Job processing failed:", statusData.error_message);
-          clearInterval(pollingIntervalRef.current!);
-          pollingIntervalRef.current = null;
-          setUploadedVideo(prev => ({ ...prev, status: "failed" }));
-          setUploadStatus("Processing failed: " + (statusData.error_message || "Unknown error"));
-          setIsUploading(false);
-        }
-      } catch (error) {
-        console.error("Error polling job status:", error);
-        // Don't stop polling on temporary errors
-      }
-    }, 10000); // Poll every 10 seconds
-  }, []);
-
   // Fetch job details when complete
   const fetchJobDetails = async (id: string) => {
     try {
       const response = await getJobDetails(id);
+      
+      // Check if the response is OK
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Job details error:", errorText);
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
       const detailsData = await response.json();
       console.log("Job details:", detailsData);
+      
+      // Check if job failed
+      if (detailsData.status === "failed") {
+        const errorMessage = detailsData.error || detailsData.detail || "Job processing failed";
+        console.error("Job failed:", errorMessage);
+        setUploadedVideo(prev => ({ 
+          ...prev, 
+          status: "failed",
+          error: `Processing failed: ${errorMessage}`
+        }));
+        setIsUploading(false);
+        return;
+      }
       
       if (detailsData.status === "completed" && Array.isArray(detailsData.results)) {
         // Process results
@@ -318,6 +291,11 @@ export default function HomeSidebar() {
         console.log("Video results:", videoResults);
         console.log("Subtitle results:", subtitleResults);
         console.log("Word timestamp results:", wordTimestampResults);
+        
+        // Check if we have any video results
+        if (videoResults.length === 0) {
+          throw new Error("No video results were generated");
+        }
         
         // Group related items together
         const processedClips: ProcessedClip[] = videoResults.map(videoResult => {
@@ -352,17 +330,90 @@ export default function HomeSidebar() {
         setSubtitlesList(subtitleFilenames);
       } else {
         console.error("Invalid job details response:", detailsData);
-        setUploadedVideo(prev => ({ ...prev, status: "failed" }));
-        setUploadStatus("Failed to process video: Invalid result format");
+        setUploadedVideo(prev => ({ 
+          ...prev, 
+          status: "failed",
+          error: "Failed to process video: Invalid result format" 
+        }));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching job details:", error);
-      setUploadedVideo(prev => ({ ...prev, status: "failed" }));
-      setUploadStatus("Failed to retrieve processing results");
+      setUploadedVideo(prev => ({ 
+        ...prev, 
+        status: "failed",
+        error: error.message || "Failed to retrieve processing results" 
+      }));
     } finally {
       setIsUploading(false);
     }
   };
+
+  // Poll for job status updates
+  useEffect(() => {
+    if (!jobId) return;
+    
+    console.log('Starting job polling for ID:', jobId);
+    
+    // Set initial progress
+    setJobProgress(5);
+    
+    // This function is called every few seconds to check job status
+    const intervalId = setInterval(async () => {
+      if (!jobId) {
+        clearInterval(intervalId);
+        return;
+      }
+      
+      try {
+        console.log('Polling job status for ID:', jobId);
+        const response = await getJobStatus(jobId);
+        
+        // Check if the response is OK
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Job status error:", errorText);
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('Job status:', data);
+        
+        // Update progress bar
+        if (data.progress && typeof data.progress === 'number') {
+          setJobProgress(data.progress);
+        }
+        
+        // Update status message
+        if (data.status_message) {
+          setUploadStatus(data.status_message);
+        }
+        
+        if (data.status === 'completed') {
+          console.log('Job completed, fetching details');
+          clearInterval(intervalId);
+          await fetchJobDetails(jobId);
+        } else if (data.status === 'failed') {
+          console.error('Job failed:', data);
+          clearInterval(intervalId);
+          
+          const errorMessage = data.error || data.detail || "Unknown error";
+          setUploadedVideo(prev => ({ 
+            ...prev, 
+            status: "failed",
+            error: `Processing failed: ${errorMessage}`
+          }));
+          setIsUploading(false);
+        }
+      } catch (error: any) {
+        console.error("Error polling job status:", error);
+        // Show the error but don't stop polling on temporary network errors
+        setUploadStatus(`Checking status... (${error.message || "Network error"})`);
+      }
+    }, 5000); // Poll every 5 seconds (reduced from 10 to improve feedback)
+    
+    // Cleanup interval on unmount
+    return () => clearInterval(intervalId);
+  }, [jobId]);
 
   // Handle YouTube link import
   const handleImportYoutube = () => {
@@ -373,10 +424,10 @@ export default function HomeSidebar() {
 
   // Upload video to backend API
   const uploadVideo = async (file: File) => {
+    if (!file) return;
     setIsUploading(true);
-    setJobProgress(0);
-    setUploadStatus("Preparing your video...");
     
+    // Create preview URL for the file
     const preview = URL.createObjectURL(file);
     
     setImportVideo(false);
@@ -386,7 +437,8 @@ export default function HomeSidebar() {
       status: "processing",
       name: file.name,
       size: file.size,
-      progress: 0
+      progress: 0,
+      error: null
     });
     setVideosOpen(true);
     
@@ -394,41 +446,97 @@ export default function HomeSidebar() {
       // Try using the new API first
       console.log("Using new job-based API");
       const jobResponse = await createVideoProcessingJob(file, 3, true, true);
+      
+      // Check if the request itself failed
+      if (!jobResponse.ok) {
+        const errorText = await jobResponse.text();
+        console.error("Job API error:", errorText);
+        throw new Error(`API error: ${jobResponse.status} ${jobResponse.statusText}`);
+      }
+      
       const jobData = await jobResponse.json();
       console.log("Job API Response:", jobData);
+      
+      // Check if the response contains an error
+      if (jobData.detail || jobData.error) {
+        const errorMessage = jobData.detail || jobData.error || "Unknown error";
+        console.error("Job API error:", errorMessage);
+        
+        // Update UI with error
+        setUploadedVideo(prev => ({ 
+          ...prev, 
+          status: "failed",
+          error: `Processing error: ${errorMessage}`
+        }));
+        setIsUploading(false);
+        
+        // Don't fall back if we got a real error response
+        return;
+      }
       
       if (jobData.job_id) {
         // New API success
         setJobId(jobData.job_id);
         setUploadStatus(`Processing started. Estimated time: ${Math.round(jobData.estimated_completion_time || 60)} seconds`);
         
-        // Start polling for job status
-        startPollingJobStatus(jobData.job_id);
+        // No need to call startPollingJobStatus as we now use a useEffect that automatically
+        // starts polling when jobId changes
       } else {
         // Fall back to legacy API
         console.log("Job API failed, falling back to legacy API");
-        const response = await processVideo(file, 3);
-        const data = await response.json();
-        console.log("Legacy API Response:", data);
-
-        if (data.status === "completed" && Array.isArray(data.clips)) {
-          setUploadedVideo(prev => ({ ...prev, status: "completed" }));
-          setClipsList(data.clips);
-          if (Array.isArray(data.subtitles)) {
-            console.log("Setting subtitles list:", data.subtitles);
-            setSubtitlesList(data.subtitles);
-          } else {
-            console.log("No subtitles array in response");
+        try {
+          const response = await processVideo(file, 3);
+          
+          // Check if the request itself failed
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Legacy API error:", errorText);
+            throw new Error(`Legacy API error: ${response.status} ${response.statusText}`);
           }
-          setIsUploading(false);
-        } else {
-          setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+          
+          const data = await response.json();
+          console.log("Legacy API Response:", data);
+          
+          // Check if the response contains an error
+          if (data.error || data.detail) {
+            throw new Error(data.error || data.detail || "Processing failed");
+          }
+
+          if (data.status === "completed" && Array.isArray(data.clips)) {
+            setUploadedVideo(prev => ({ ...prev, status: "completed" }));
+            setClipsList(data.clips);
+            if (Array.isArray(data.subtitles)) {
+              console.log("Setting subtitles list:", data.subtitles);
+              setSubtitlesList(data.subtitles);
+            } else {
+              console.log("No subtitles array in response");
+            }
+            setIsUploading(false);
+          } else {
+            setUploadedVideo(prev => ({ 
+              ...prev, 
+              status: "failed",
+              error: "Processing failed: Invalid response format" 
+            }));
+            setIsUploading(false);
+          }
+        } catch (error: any) {
+          console.error("Legacy API error:", error);
+          setUploadedVideo(prev => ({ 
+            ...prev, 
+            status: "failed",
+            error: `Legacy API error: ${error.message || "Connection failed"}`
+          }));
           setIsUploading(false);
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error:", error);
-      setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+      setUploadedVideo(prev => ({ 
+        ...prev, 
+        status: "failed",
+        error: error.message || "Upload failed. Please try again."
+      }));
       setIsUploading(false);
     }
   };
@@ -493,6 +601,25 @@ export default function HomeSidebar() {
       onClickHandler: () => {}
     },
   ];
+
+  // Update the error display component for better visualization
+  const ErrorDisplay = ({error}: {error: string | null | undefined}) => {
+    if (!error) return null;
+    
+    return (
+      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-md">
+        <div className="flex items-start">
+          <svg className="w-5 h-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          <div>
+            <p className="text-sm font-medium text-red-800">Processing failed</p>
+            <p className="text-sm text-red-700 mt-1">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="">
@@ -794,12 +921,7 @@ export default function HomeSidebar() {
                       )}
                       
                       {uploadedVideo.status === "failed" && (
-                        <span className="text-red-500 flex items-center gap-1 mt-2">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                          </svg>
-                          {uploadStatus || "Processing failed"}
-                        </span>
+                        <ErrorDisplay error={uploadedVideo.error} />
                       )}
                     </div>
                   </div>

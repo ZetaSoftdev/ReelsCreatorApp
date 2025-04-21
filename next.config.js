@@ -25,6 +25,28 @@ const nextConfig = {
       },
     ]
   },
+  // Add webpack configuration to properly transpile bcryptjs
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't resolve 'fs' module on the client to prevent this error:
+      // https://github.com/vercel/next.js/issues/7755
+      config.resolve.fallback = { 
+        ...config.resolve.fallback,
+        fs: false,
+        crypto: false,
+        stream: false,
+        os: false 
+      };
+    }
+
+    // Ensure bcryptjs is transpiled properly
+    config.module.rules.push({
+      test: /node_modules\/bcryptjs/,
+      use: 'next-swc-loader'
+    });
+
+    return config;
+  },
 }
 
 module.exports = nextConfig 
