@@ -3,6 +3,9 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/constants";
 
+// Force this route to be treated as a server-side route, not Edge
+export const runtime = 'nodejs';
+
 // GET - Fetch a specific subscription plan by ID
 export async function GET(
   request: NextRequest,
