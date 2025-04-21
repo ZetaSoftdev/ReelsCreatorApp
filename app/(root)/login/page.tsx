@@ -71,15 +71,23 @@ const LoginForm = () => {
             
             // Store minimal user data in localStorage for client-side checks
             if (result.user) {
-                localStorage.setItem('userData', JSON.stringify({
+                console.log("Storing user data in localStorage:", {
                     email: result.user.email,
                     role: result.user.role
+                });
+                
+                localStorage.setItem('userData', JSON.stringify({
+                    email: result.user.email,
+                    role: result.user.role,
+                    timestamp: new Date().getTime() // Add timestamp for freshness check
                 }));
                 
                 // Manually redirect based on role
                 if (result.user.role === "ADMIN") {
+                    console.log("Redirecting to admin dashboard");
                     router.push("/admin/dashboard");
                 } else {
+                    console.log("Redirecting to user dashboard");
                     router.push("/dashboard/home");
                 }
             }

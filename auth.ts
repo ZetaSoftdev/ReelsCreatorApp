@@ -90,23 +90,37 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     trustHost: true,
     callbacks: {
       async signIn({ user, account }) {
+        console.log("SignIn callback started for account:", account?.provider);
+        
         // For credentials provider, we already verified in authorize
         if (account?.provider === "credentials") {
+          console.log("Credentials provider - sign in successful");
           return true;
         }
 
         // Handle Google sign in
         if (account?.provider === "google" && user.email) {
+          console.log("Google sign-in for email:", user.email);
+          
           return await safePrismaOperation(async () => {
             // Check if user exists
             const existingUser = await prisma.user.findUnique({
               where: {
                 email: user.email as string,
               },
+              select: {
+                id: true,
+                email: true,
+                role: true,
+                profileImage: true
+              }
             });
 
+            console.log("Existing user check:", existingUser ? "Found" : "Not found");
+            
             // If user doesn't exist, create a new one
             if (!existingUser) {
+              console.log("Creating new user with default role USER");
               const newUser = await prisma.user.create({
                 data: {
                   email: user.email as string,
@@ -119,16 +133,19 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               });
               
               // Add role to user object
-              user.role = Role.USER as any;
+              console.log("Setting new user role to:", Role.USER);
+              user.role = Role.USER as any; // Cast to any to avoid type issues
               return true;
             }
             
             // Add role and profile image to user object for Google authentication
-            user.role = existingUser.role as any;
+            console.log("Setting existing user role from database:", existingUser.role);
+            user.role = existingUser.role;
             
             // Always update the user with the Google profile image if coming from Google auth
             if (user.image && !existingUser.profileImage) {
               // If user doesn't have a profile image, update it with the Google one
+              console.log("Updating user profile image");
               await prisma.user.update({
                 where: { id: existingUser.id },
                 data: { profileImage: user.image }
@@ -138,6 +155,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               user.image = existingUser.profileImage;
             }
             
+            console.log("Google sign-in successful, user role:", user.role);
             return true;
           }, true);
         }
@@ -145,15 +163,20 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         return true;
       },
       async session({ session, token }) {
+        console.log("Session callback - token:", token);
+        
         if (session.user && token.sub) {
           // Ensure ID is set
           session.user.id = token.sub;
           
           // Add role from token to session with fallback to USER
+          console.log("Setting user role from token:", token.role);
           session.user.role = (token.role as Role) || Role.USER;
+          console.log("User role set to:", session.user.role);
           
           // Get the latest user data from the database to ensure image and other data is fresh
           await safePrismaOperation(async () => {
+            console.log("Fetching latest user data for ID:", token.sub);
             const userData = await prisma.user.findUnique({
               where: {
                 id: token.sub
@@ -161,11 +184,18 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               select: {
                 profileImage: true,
                 name: true,
-                email: true
+                email: true,
+                role: true  // Explicitly select role
               }
             });
             
             if (userData) {
+              console.log("User data found:", {
+                name: userData.name,
+                email: userData.email,
+                role: userData.role
+              });
+              
               // Update session with the latest data
               if (userData.profileImage) {
                 session.user.image = userData.profileImage;
@@ -176,9 +206,23 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               if (userData.email) {
                 session.user.email = userData.email;
               }
+              // Explicitly set role from database if available
+              if (userData.role) {
+                console.log("Updating role from database:", userData.role);
+                session.user.role = userData.role as Role;
+              }
+            } else {
+              console.log("No user data found for ID:", token.sub);
             }
           });
         }
+        
+        console.log("Final session state:", {
+          id: session.user?.id,
+          email: session.user?.email,
+          role: session.user?.role
+        });
+        
         return session;
       },
       async jwt({ token, user, trigger, session }) {

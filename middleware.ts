@@ -7,6 +7,8 @@ export async function middleware(request: NextRequest) {
   // Get the pathname from the URL
   const path = request.nextUrl.pathname
   
+  console.log(`[Middleware] Processing request for path: ${path}`);
+  
   // Skip middleware for Next.js internals and static assets
   if (
     path.startsWith('/_next') || 
@@ -47,6 +49,9 @@ export async function middleware(request: NextRequest) {
   // Define admin-only paths
   const isAdminPath = path.startsWith('/admin')
   
+  // Log the request path and whether it's public/admin
+  console.log(`[Middleware] Path: ${path}, Public: ${isPublicPath}, Admin: ${isAdminPath}`);
+  
   // Get the authentication session
   const session = await auth()
   
@@ -55,36 +60,44 @@ export async function middleware(request: NextRequest) {
     // Get the user's role (default to USER if undefined)
     const userRole = session.user.role || Role.USER
     
-    console.log(`[Middleware] Authenticated user accessing ${path} with role: ${userRole}`)
+    console.log(`[Middleware] Authenticated user: ${session.user.email}`);
+    console.log(`[Middleware] User role: ${userRole}`);
+    console.log(`[Middleware] User ID: ${session.user.id}`);
+    console.log(`[Middleware] Session expiry: ${session.expires}`);
     
     // Redirect authenticated users away from login/signup pages
     if (['/login', '/sign-up'].includes(path)) {
       if (userRole === Role.ADMIN) {
+        console.log(`[Middleware] Redirecting admin from login to admin dashboard`);
         return NextResponse.redirect(new URL('/admin/dashboard', request.url))
       } else {
+        console.log(`[Middleware] Redirecting user from login to dashboard`);
         return NextResponse.redirect(new URL('/dashboard/home', request.url))
       }
     }
     
     // Check admin page access
     if (isAdminPath && userRole !== Role.ADMIN) {
-      console.log(`[Middleware] Unauthorized access attempt to ${path} by role: ${userRole}`)
+      console.log(`[Middleware] ⚠️ UNAUTHORIZED - User role ${userRole} attempted to access admin path ${path}`);
       return NextResponse.redirect(new URL('/unauthorized', request.url))
     }
     
     // For all other paths, allow access
+    console.log(`[Middleware] Access granted to ${path}`);
     return NextResponse.next()
   } 
   
   // For unauthenticated users
-  console.log(`[Middleware] Unauthenticated user accessing ${path}`)
+  console.log(`[Middleware] Unauthenticated user accessing ${path}`);
   
   // Allow access to public paths
   if (isPublicPath) {
+    console.log(`[Middleware] Public path access allowed`);
     return NextResponse.next()
   }
   
   // Redirect to login for all other paths
+  console.log(`[Middleware] Redirecting to login`);
   return NextResponse.redirect(new URL('/login', request.url))
 }
 
