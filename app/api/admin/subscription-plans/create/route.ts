@@ -62,27 +62,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "At least one feature is required" }, { status: 400 });
     }
     
-    // Insert the new plan
+    // Insert the new plan using Prisma model API instead of raw SQL
     try {
-      await prisma.$executeRaw`
-        INSERT INTO "SubscriptionPlan" (
-          id, name, description, "monthlyPrice", "yearlyPrice", 
-          "minutesAllowed", "maxFileSize", "maxConcurrentRequests", 
-          "storageDuration", "isActive", "createdAt", "updatedAt",
-          features
-        ) 
-        VALUES (
-          gen_random_uuid(), ${name}, ${description}, ${monthlyPrice}, ${yearlyPrice}, 
-          ${minutesAllowed}, ${maxFileSize}, ${maxConcurrentRequests}, 
-          ${storageDuration}, ${isActive}, now(), now(),
-          ${features}::text[]
-        )
-      `;
+      // Create a new subscription plan
+      const newPlan = await prisma.subscriptionPlan.create({
+        data: {
+          name,
+          description,
+          monthlyPrice,
+          yearlyPrice,
+          features,
+          minutesAllowed,
+          maxFileSize,
+          maxConcurrentRequests,
+          storageDuration,
+          isActive,
+        }
+      });
       
-      // Return success
+      // Return success with created plan
       return NextResponse.json({
         success: true,
-        message: "Subscription plan created successfully"
+        message: "Subscription plan created successfully",
+        subscriptionPlan: newPlan
       }, { status: 201 });
     } catch (dbError: any) {
       console.error("Database error creating plan:", dbError);

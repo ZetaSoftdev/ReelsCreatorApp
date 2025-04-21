@@ -20,12 +20,10 @@ export async function GET(
 
     const id = params.id;
 
-    // Use raw query to fetch the subscription plan
-    const plans = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" WHERE id = ${id}
-    `;
-    
-    const subscriptionPlan = plans && Array.isArray(plans) && plans.length > 0 ? plans[0] : null;
+    // Use Prisma model API instead of raw SQL
+    const subscriptionPlan = await prisma.subscriptionPlan.findUnique({
+      where: { id }
+    });
 
     if (!subscriptionPlan) {
       return NextResponse.json(
@@ -68,11 +66,9 @@ export async function PUT(
     const data = await request.json();
 
     // Check if the subscription plan exists
-    const existingPlans = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" WHERE id = ${id}
-    `;
-    
-    const existingPlan = existingPlans && Array.isArray(existingPlans) && existingPlans.length > 0 ? existingPlans[0] : null;
+    const existingPlan = await prisma.subscriptionPlan.findUnique({
+      where: { id }
+    });
 
     if (!existingPlan) {
       return NextResponse.json(
@@ -81,81 +77,29 @@ export async function PUT(
       );
     }
 
-    // Prepare individual update statements for each field
-    if (data.name !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET name = ${data.name} WHERE id = ${id}
-      `;
-    }
+    // Prepare update data
+    const updateData: any = {};
     
-    if (data.description !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET description = ${data.description} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.monthlyPrice !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "monthlyPrice" = ${parseFloat(data.monthlyPrice)} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.yearlyPrice !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "yearlyPrice" = ${parseFloat(data.yearlyPrice)} WHERE id = ${id}
-      `;
-    }
-    
+    // Only include fields that were provided in the request
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.monthlyPrice !== undefined) updateData.monthlyPrice = parseFloat(data.monthlyPrice);
+    if (data.yearlyPrice !== undefined) updateData.yearlyPrice = parseFloat(data.yearlyPrice);
     if (data.features !== undefined) {
       const featuresArray = Array.isArray(data.features) ? data.features : [data.features];
-      // Need special handling for arrays in Postgres
-      const featuresString = JSON.stringify(featuresArray);
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET features = ${featuresArray}::text[] WHERE id = ${id}
-      `;
+      updateData.features = featuresArray;
     }
+    if (data.minutesAllowed !== undefined) updateData.minutesAllowed = parseInt(data.minutesAllowed);
+    if (data.maxFileSize !== undefined) updateData.maxFileSize = parseInt(data.maxFileSize);
+    if (data.maxConcurrentRequests !== undefined) updateData.maxConcurrentRequests = parseInt(data.maxConcurrentRequests);
+    if (data.storageDuration !== undefined) updateData.storageDuration = parseInt(data.storageDuration);
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
     
-    if (data.minutesAllowed !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "minutesAllowed" = ${parseInt(data.minutesAllowed)} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.maxFileSize !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "maxFileSize" = ${parseInt(data.maxFileSize)} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.maxConcurrentRequests !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "maxConcurrentRequests" = ${parseInt(data.maxConcurrentRequests)} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.storageDuration !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "storageDuration" = ${parseInt(data.storageDuration)} WHERE id = ${id}
-      `;
-    }
-    
-    if (data.isActive !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "SubscriptionPlan" SET "isActive" = ${data.isActive} WHERE id = ${id}
-      `;
-    }
-    
-    // Update the updatedAt timestamp
-    await prisma.$executeRaw`
-      UPDATE "SubscriptionPlan" SET "updatedAt" = now() WHERE id = ${id}
-    `;
-    
-    // Fetch the updated plan
-    const updatedPlans = await prisma.$queryRaw`
-      SELECT * FROM "SubscriptionPlan" WHERE id = ${id}
-    `;
-    
-    const updatedPlan = updatedPlans && Array.isArray(updatedPlans) && updatedPlans.length > 0 ? updatedPlans[0] : null;
+    // Update the subscription plan using Prisma model API
+    const updatedPlan = await prisma.subscriptionPlan.update({
+      where: { id },
+      data: updateData
+    });
 
     return NextResponse.json({ subscriptionPlan: updatedPlan });
   } catch (error: any) {
@@ -190,17 +134,14 @@ export async function DELETE(
     const id = params.id;
 
     // Check if the subscription plan has active subscriptions
-    const activeSubscriptionsResult = await prisma.$queryRaw`
-      SELECT COUNT(*) as count FROM "Subscription" 
-      WHERE "planId" = ${id} AND status = 'active'
-    `;
-    
-    // Type assertion for the activeSubscriptionsResult
-    const activeSubscriptions = activeSubscriptionsResult as Array<{count: string | number}>;
-    const count = activeSubscriptions[0]?.count || 0;
-    const numCount = typeof count === 'string' ? parseInt(count) : count;
+    const activeSubscriptionsCount = await prisma.subscription.count({
+      where: {
+        planId: id,
+        status: 'active'
+      }
+    });
 
-    if (numCount > 0) {
+    if (activeSubscriptionsCount > 0) {
       return NextResponse.json(
         { error: "Cannot delete a subscription plan with active subscriptions" },
         { status: 400 }
@@ -208,9 +149,9 @@ export async function DELETE(
     }
 
     // Delete the subscription plan
-    await prisma.$executeRaw`
-      DELETE FROM "SubscriptionPlan" WHERE id = ${id}
-    `;
+    await prisma.subscriptionPlan.delete({
+      where: { id }
+    });
 
     return NextResponse.json(
       { message: "Subscription plan deleted successfully" },
