@@ -14,7 +14,16 @@ const nextConfig = {
   },
   // Other Next.js config options can go here
   images: {
-    domains: ['localhost'],
+    domains: ['localhost', 'reels-creator-alb-555953912.us-west-1.elb.amazonaws.com'],
+  },
+  // Add rewrites to proxy API requests to avoid mixed content issues
+  async rewrites() {
+    return [
+      {
+        source: '/api/proxy/:path*',
+        destination: process.env.NEXT_PUBLIC_API_ENDPOINT.replace('/api/v1', '') + '/:path*', // Proxy to API server
+      },
+    ]
   },
 }
 

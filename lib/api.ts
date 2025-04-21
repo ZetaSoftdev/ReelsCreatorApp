@@ -2,8 +2,16 @@
  * API utility functions for making requests to the external API
  */
 
-// Get the API endpoint from environment variables
-export const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000/api/v1';
+// Original API endpoint from environment variables
+const ORIGINAL_API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000/api/v1';
+
+// Determine if we need to use the proxy (in browser) or direct connection (server-side)
+const isBrowser = typeof window !== 'undefined';
+
+// Use our proxy when in the browser to avoid mixed content issues
+export const API_ENDPOINT = isBrowser 
+  ? '/api/proxy' // Use local proxy to avoid HTTPS/HTTP mixed content issues
+  : ORIGINAL_API_ENDPOINT; // Direct connection on server-side
 
 /**
  * Generate a full URL for the external API
@@ -94,7 +102,10 @@ export async function apiDelete(path: string, options: RequestInit = {}) {
  * @returns The complete video URL
  */
 export function getVideoUrl(filename: string): string {
-  return getApiUrl(`videos/${encodeURIComponent(filename)}`);
+  // Use our proxy for media URLs to avoid mixed content issues
+  return isBrowser 
+    ? `/api/proxy/videos/${encodeURIComponent(filename)}` 
+    : getApiUrl(`videos/${encodeURIComponent(filename)}`);
 }
 
 /**
@@ -103,7 +114,10 @@ export function getVideoUrl(filename: string): string {
  * @returns The complete subtitle URL
  */
 export function getSubtitleUrl(filename: string): string {
-  return getApiUrl(`subtitles/${encodeURIComponent(filename)}`);
+  // Use our proxy for media URLs to avoid mixed content issues
+  return isBrowser 
+    ? `/api/proxy/subtitles/${encodeURIComponent(filename)}` 
+    : getApiUrl(`subtitles/${encodeURIComponent(filename)}`);
 }
 
 /**
@@ -112,7 +126,10 @@ export function getSubtitleUrl(filename: string): string {
  * @returns The word timestamps URL
  */
 export function getWordTimestampsUrl(filename: string): string {
-  return getApiUrl(`word-timestamps/${encodeURIComponent(filename)}`);
+  // Use our proxy for media URLs to avoid mixed content issues
+  return isBrowser 
+    ? `/api/proxy/word-timestamps/${encodeURIComponent(filename)}` 
+    : getApiUrl(`word-timestamps/${encodeURIComponent(filename)}`);
 }
 
 /**
