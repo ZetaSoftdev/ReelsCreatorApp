@@ -74,7 +74,7 @@ export default function SettingsPage() {
   // Updated settings structure with loading state
   const [settings, setSettings] = useState<Settings>({
     branding: {
-      siteName: "Reels Creator",
+      siteName: "Editur",
       logo: null,
       favicon: null,
       primaryColor: "#8B5CF6",
@@ -144,9 +144,9 @@ export default function SettingsPage() {
         setSettings(prev => ({
           ...prev,
           branding: {
-            siteName: data.siteName || "Reels Creator",
-            logo: data.logoUrl || null,
-            favicon: data.faviconUrl || null,
+            siteName: data.siteName || "Editur",
+            logo: data.logoUrl || "/branding/logo.png",
+            favicon: data.faviconUrl || "/branding/favicon.png",
             primaryColor: data.primaryColor || "#8B5CF6",
             accentColor: data.accentColor || "#F59E0B",
             defaultFont: data.defaultFont || "Poppins"
@@ -278,7 +278,7 @@ export default function SettingsPage() {
     try {
       // Create default settings
       const defaultSettings = {
-        siteName: "Reels Creator",
+        siteName: "Editur",
         primaryColor: "#8B5CF6",
         accentColor: "#F59E0B",
         defaultFont: "Poppins"
@@ -304,8 +304,8 @@ export default function SettingsPage() {
         ...prev,
         branding: {
           ...defaultSettings,
-          logo: null,
-          favicon: null
+          logo: "/branding/logo.png",
+          favicon: "/branding/favicon.png"
         }
       }));
       

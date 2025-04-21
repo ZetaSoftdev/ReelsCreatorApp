@@ -19,7 +19,7 @@ type LogoContextType = {
 };
 
 const defaultBranding: BrandingSettings = {
-  siteName: 'Reels Creator',
+  siteName: 'Editur',
   logoUrl: '/branding/logo.png',
   faviconUrl: '/branding/favicon.png',
   primaryColor: "#8B5CF6",

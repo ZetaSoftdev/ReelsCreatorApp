@@ -44,8 +44,8 @@ export default function AdminLayout({
 }) {
   const pathname = usePathname();
   const [brandingSettings, setBrandingSettings] = useState<BrandingSettings>({
-    siteName: "Reels Creator",
-    logoUrl: "/logo.png",
+    siteName: "Editur",
+    logoUrl: "/branding/logo.png",
     faviconUrl: null,
     primaryColor: "#8B5CF6",
     accentColor: "#F59E0B",
@@ -98,8 +98,8 @@ export default function AdminLayout({
         
         const data = await response.json();
         setBrandingSettings({
-          siteName: data.siteName || "Reels Creator",
-          logoUrl: data.logoUrl || "/logo.png",
+          siteName: data.siteName || "Editur",
+          logoUrl: data.logoUrl || "/branding/logo.png",
           faviconUrl: data.faviconUrl || null,
           primaryColor: data.primaryColor || "#8B5CF6",
           accentColor: data.accentColor || "#F59E0B",
@@ -139,7 +139,7 @@ export default function AdminLayout({
                   height={40} 
                   alt={brandingSettings.siteName} 
                   className="object-contain h-8"
-                  onError={() => setBrandingSettings(prev => ({...prev, logoUrl: "/logo.png"}))}
+                  onError={() => setBrandingSettings(prev => ({...prev, logoUrl: "/branding/logo.png"}))}
                 />
               ) : (
                 <h2 className="text-xl font-bold" style={{ color: brandingSettings.primaryColor }}>
@@ -191,7 +191,7 @@ export default function AdminLayout({
                 height={40} 
                 alt={brandingSettings.siteName} 
                 className="object-contain h-8"
-                onError={() => setBrandingSettings(prev => ({...prev, logoUrl: "/logo.png"}))}
+                onError={() => setBrandingSettings(prev => ({...prev, logoUrl: "/branding/logo.png"}))}
               />
             ) : (
               <h2 className="text-xl font-bold" style={{ color: brandingSettings.primaryColor }}>

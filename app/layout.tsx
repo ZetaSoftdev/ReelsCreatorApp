@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Reels Creator",
+  title: "Editur",
   description: "Video editing web application",
 };
 
@@ -28,7 +28,7 @@ async function getBrandingSettings() {
       console.log('Skipping branding API call during build phase');
       // Return default values directly instead of making API call
       return {
-        siteName: 'Reels Creator',
+        siteName: 'Editur',
         faviconUrl: '/branding/favicon.png',
         primaryColor: '#8B5CF6',
         accentColor: '#F59E0B',
@@ -58,7 +58,7 @@ async function getBrandingSettings() {
   } catch (error) {
     console.error("Error in getBrandingSettings:", error);
     return {
-      siteName: 'Reels Creator',
+      siteName: 'Editur',
       faviconUrl: '/branding/favicon.png'
     };
   }
@@ -71,8 +71,8 @@ export default async function RootLayout({
 }) {
   // Fetch branding settings
   const brandingSettings = await getBrandingSettings();
-  const siteName = brandingSettings?.siteName || 'Reels Creator';
-  const faviconUrl = brandingSettings?.faviconUrl || '/favicon.ico';
+  const siteName = brandingSettings?.siteName || 'Editur';
+  const faviconUrl = brandingSettings?.faviconUrl || '/branding/favicon.png';
   
   return (
     <html lang="en">

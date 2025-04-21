@@ -9,7 +9,7 @@ import { Role } from '@/lib/constants';
 
 // Define default branding settings
 const defaultBranding = {
-  siteName: "Reels Creator",
+  siteName: "Editur",
   logoUrl: "/branding/logo.png",
   faviconUrl: "/branding/favicon.png",
   primaryColor: "#8B5CF6",
@@ -89,7 +89,7 @@ async function ensureBrandingSettings() {
       try {
         await prisma.brandingSettings.create({
           data: {
-            siteName: "Reels Creator",
+            siteName: "Editur",
             logoUrl: "/branding/logo.png",
             faviconUrl: "/branding/favicon.png",
             primaryColor: "#8B5CF6",
@@ -102,7 +102,7 @@ async function ensureBrandingSettings() {
         console.error('Error creating default branding settings:', error);
         // Fallback to file storage
         await writeSettingsToFile({
-          siteName: "Reels Creator",
+          siteName: "Editur",
           logoUrl: "/branding/logo.png",
           faviconUrl: "/branding/favicon.png",
           primaryColor: "#8B5CF6",
