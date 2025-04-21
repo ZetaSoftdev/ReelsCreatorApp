@@ -10,6 +10,7 @@ import {
   Frame,
   GalleryVerticalEnd,
   HomeIcon,
+  LayoutDashboard,
   Map,
   PieChart,
   Settings2,
@@ -34,11 +35,27 @@ import { GrSchedule, GrServices } from "react-icons/gr"
 import { MdAutoFixNormal } from "react-icons/md"
 import { usePathname } from 'next/navigation'
 import { useLogoContext } from "@/context/LogoContext"
+import { Role } from "@/lib/constants"
+import { useState, useEffect } from "react"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession()
   const pathname = usePathname()
   const { branding } = useLogoContext()
+  const [isAdmin, setIsAdmin] = useState(false);
+  
+  // Check if user is admin
+  useEffect(() => {
+    try {
+      const userData = localStorage.getItem('userData');
+      if (userData) {
+        const user = JSON.parse(userData);
+        setIsAdmin(user.role === Role.ADMIN);
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error);
+    }
+  }, []);
 
   // This is sample data.
   const data = {
@@ -121,6 +138,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
+        {/* Admin Dashboard Button - Only visible on mobile for admin users */}
+        {isAdmin && (
+          <div className="px-4 py-2 sm:hidden">
+            <h1 className="pl-1">Admin</h1>
+            <Link href="/admin/dashboard" className="flex items-center gap-2 px-3 py-2 rounded-md ">
+              <LayoutDashboard size={20} className="mr-2"/>
+              <span>Admin Dashboard</span>
+            </Link>
+          </div>
+        )}
         {/* <NavProjects projects={data.projects} /> */}
       </SidebarContent>
       <SidebarFooter className="flex flex-col gap-4">

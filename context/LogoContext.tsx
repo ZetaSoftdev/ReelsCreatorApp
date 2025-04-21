@@ -48,13 +48,13 @@ export function LogoProvider({ children }: { children: React.ReactNode }) {
       
       // Add a cache-busting parameter to ensure fresh data
       const timestamp = Date.now();
+      
       const response = await fetch(`/api/branding?t=${timestamp}`, {
-        cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache'
         },
-        next: { revalidate: 0 }
+        next: { revalidate: 3600 }
       });
       
       if (response.ok) {

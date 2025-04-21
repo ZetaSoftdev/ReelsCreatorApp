@@ -38,9 +38,15 @@ async function getBrandingSettings() {
     
     // Add a cache-busting timestamp to ensure we get fresh data
     const timestamp = Date.now();
-    const response = await fetch(`/api/branding?t=${timestamp}`, { 
-      cache: 'no-store',
-      next: { revalidate: 0 }
+    
+    // Create a proper absolute URL for the API endpoint
+    const apiUrl = new URL(
+      `/api/branding?t=${timestamp}`,
+      process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    ).toString();
+    
+    const response = await fetch(apiUrl, { 
+      next: { revalidate: 3600 } // Revalidate every hour instead of 0
     });
     
     if (!response.ok) {

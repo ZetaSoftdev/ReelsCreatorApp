@@ -18,8 +18,8 @@ const createPrismaMock = () => {
               return Promise.resolve({
                 id: 'mock-id',
                 siteName: "Reels Creator",
-                logoUrl: "/logo.png",
-                faviconUrl: "/favicon.ico",
+                logoUrl: "branding/logo.png",
+                faviconUrl: "branding/favicon.ico",
                 primaryColor: "#8B5CF6",
                 accentColor: "#F59E0B",
                 defaultFont: "Poppins",

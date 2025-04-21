@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { 
   ChevronDown, 
@@ -21,7 +21,64 @@ import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Role } from "@/lib/constants";
-import { processVideo, getVideoUrl, getSubtitleUrl } from "@/lib/api";
+import { 
+  processVideo, 
+  getVideoUrl, 
+  getSubtitleUrl, 
+  getWordTimestampsUrl,
+  createVideoProcessingJob,
+  getJobStatus,
+  getJobDetails
+} from "@/lib/api";
+
+// Define new result type interfaces
+interface VideoResult {
+  id: string;
+  url: string;
+  result_type: "video";
+  metadata: {
+    filename: string;
+    start_time: number;
+    end_time: number;
+    duration: number;
+    with_captions: boolean;
+    has_srt: boolean;
+    has_word_timestamps: boolean;
+    title: string;
+    reason?: string;
+  };
+  created_at: string;
+}
+
+interface SubtitleResult {
+  id: string;
+  url: string;
+  result_type: "subtitles";
+  metadata: {
+    format: string;
+    video_filename: string;
+  };
+  created_at: string;
+}
+
+interface WordTimestampsResult {
+  id: string;
+  url: string;
+  result_type: "word_timestamps";
+  metadata: {
+    format: string;
+    video_filename: string;
+  };
+  created_at: string;
+}
+
+type JobResult = VideoResult | SubtitleResult | WordTimestampsResult;
+
+interface ProcessedClip {
+  videoResult: VideoResult;
+  subtitleResult?: SubtitleResult;
+  wordTimestampsResult?: WordTimestampsResult;
+}
 
 export default function HomeSidebar() {
   const [videosOpen, setVideosOpen] = useState(false);
@@ -32,28 +89,35 @@ export default function HomeSidebar() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [processedClips, setProcessedClips] = useState<ProcessedClip[]>([]);
   const [clipsList, setClipsList] = useState<string[]>([]);
   const [subtitlesList, setSubtitlesList] = useState<string[]>([]);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const clipsPerPage = 6;
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobProgress, setJobProgress] = useState<number>(0);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [uploadedVideo, setUploadedVideo] = useState<{
     file: File | null;
     url: string;
     status: "processing" | "completed" | "failed" | null;
     name?: string;
     size?: number;
+    progress?: number;
   }>({ file: null, url: "", status: null });
   const router = useRouter();
 
-  // Calculate total pages
-  const totalPages = Math.ceil(clipsList.length / clipsPerPage);
+  // Calculate total pages - updated to work with both new and old API responses
+  const totalClipsCount = processedClips.length > 0 ? processedClips.length : clipsList.length;
+  const totalPages = Math.ceil(totalClipsCount / clipsPerPage);
   
-  // Get current clips
+  // Get current clips - updated to work with both new and old API responses
   const indexOfLastClip = currentPage * clipsPerPage;
   const indexOfFirstClip = indexOfLastClip - clipsPerPage;
   const currentClips = clipsList.slice(indexOfFirstClip, indexOfLastClip);
+  const currentProcessedClips = processedClips.slice(indexOfFirstClip, indexOfLastClip);
   
   // Change page
   const goToNextPage = () => {
@@ -71,11 +135,21 @@ export default function HomeSidebar() {
   const clearStorage = () => {
     localStorage.removeItem('clipsList');
     localStorage.removeItem('subtitlesList');
+    localStorage.removeItem('processedClips');
     localStorage.removeItem('uploadedVideo');
     setClipsList([]);
     setSubtitlesList([]);
+    setProcessedClips([]);
     setUploadedVideo({ file: null, url: "", status: null });
     setCurrentPage(1);
+    setJobId(null);
+    setJobProgress(0);
+    
+    // Clear any ongoing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
   };
 
   // Check if user is admin
@@ -95,36 +169,59 @@ export default function HomeSidebar() {
   useEffect(() => {
     const savedClips = localStorage.getItem('clipsList');
     const savedSubtitles = localStorage.getItem('subtitlesList');
+    const savedProcessedClips = localStorage.getItem('processedClips');
     const savedVideo = localStorage.getItem('uploadedVideo');
     
-    if (savedClips) {
-      setClipsList(JSON.parse(savedClips));
+    if (savedProcessedClips) {
+      try {
+        setProcessedClips(JSON.parse(savedProcessedClips));
+      } catch (error) {
+        console.error("Error parsing processed clips:", error);
+      }
+    } else if (savedClips) {
+      // Fallback for legacy storage format
+      try {
+        setClipsList(JSON.parse(savedClips));
+        if (savedSubtitles) {
+          setSubtitlesList(JSON.parse(savedSubtitles));
+        }
+      } catch (error) {
+        console.error("Error parsing legacy clips data:", error);
+      }
     }
-    if (savedSubtitles) {
-      setSubtitlesList(JSON.parse(savedSubtitles));
-    }
+    
     if (savedVideo) {
-      const videoData = JSON.parse(savedVideo);
-      setUploadedVideo({
-        file: null,
-        url: videoData.url,
-        status: videoData.status,
-        name: videoData.name,
-        size: videoData.size
-      });
-      setVideosOpen(true);
+      try {
+        const videoData = JSON.parse(savedVideo);
+        setUploadedVideo({
+          file: null,
+          url: videoData.url,
+          status: videoData.status,
+          name: videoData.name,
+          size: videoData.size,
+          progress: videoData.progress
+        });
+        setVideosOpen(true);
+      } catch (error) {
+        console.error("Error parsing uploaded video data:", error);
+      }
     }
   }, []);
 
-  // Save to localStorage whenever clips or subtitles change
+  // Save to localStorage whenever clips or processedClips change
   useEffect(() => {
+    if (processedClips.length > 0) {
+      localStorage.setItem('processedClips', JSON.stringify(processedClips));
+    }
+    
+    // Keep legacy storage for backward compatibility
     if (clipsList.length > 0) {
       localStorage.setItem('clipsList', JSON.stringify(clipsList));
     }
     if (subtitlesList.length > 0) {
       localStorage.setItem('subtitlesList', JSON.stringify(subtitlesList));
     }
-  }, [clipsList, subtitlesList]);
+  }, [clipsList, subtitlesList, processedClips]);
 
   useEffect(() => {
     if (uploadedVideo.url) {
@@ -132,11 +229,140 @@ export default function HomeSidebar() {
         url: uploadedVideo.url,
         status: uploadedVideo.status,
         name: uploadedVideo.file?.name,
-        size: uploadedVideo.file?.size
+        size: uploadedVideo.file?.size,
+        progress: uploadedVideo.progress
       };
       localStorage.setItem('uploadedVideo', JSON.stringify(videoData));
     }
   }, [uploadedVideo]);
+
+  // Cleanup polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for job status
+  const startPollingJobStatus = useCallback((id: string) => {
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
+    console.log("Starting to poll job status for:", id);
+    
+    // Start new polling interval
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await getJobStatus(id);
+        const statusData = await response.json();
+        console.log("Job status:", statusData);
+        
+        if (statusData.status === "processing") {
+          // Update progress
+          setJobProgress(statusData.progress || 0);
+          setUploadedVideo(prev => ({ 
+            ...prev, 
+            status: "processing",
+            progress: statusData.progress || 0
+          }));
+          setUploadStatus(`Processing: ${Math.round(statusData.progress || 0)}% complete`);
+        } 
+        else if (statusData.status === "completed") {
+          // Job completed, get details
+          console.log("Job completed, fetching details");
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          await fetchJobDetails(id);
+        } 
+        else if (statusData.status === "failed") {
+          // Job failed
+          console.error("Job processing failed:", statusData.error_message);
+          clearInterval(pollingIntervalRef.current!);
+          pollingIntervalRef.current = null;
+          setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+          setUploadStatus("Processing failed: " + (statusData.error_message || "Unknown error"));
+          setIsUploading(false);
+        }
+      } catch (error) {
+        console.error("Error polling job status:", error);
+        // Don't stop polling on temporary errors
+      }
+    }, 10000); // Poll every 10 seconds
+  }, []);
+
+  // Fetch job details when complete
+  const fetchJobDetails = async (id: string) => {
+    try {
+      const response = await getJobDetails(id);
+      const detailsData = await response.json();
+      console.log("Job details:", detailsData);
+      
+      if (detailsData.status === "completed" && Array.isArray(detailsData.results)) {
+        // Process results
+        const videoResults = detailsData.results.filter(
+          (result: JobResult) => result.result_type === "video"
+        ) as VideoResult[];
+        
+        const subtitleResults = detailsData.results.filter(
+          (result: JobResult) => result.result_type === "subtitles"
+        ) as SubtitleResult[];
+        
+        const wordTimestampResults = detailsData.results.filter(
+          (result: JobResult) => result.result_type === "word_timestamps"
+        ) as WordTimestampsResult[];
+        
+        console.log("Video results:", videoResults);
+        console.log("Subtitle results:", subtitleResults);
+        console.log("Word timestamp results:", wordTimestampResults);
+        
+        // Group related items together
+        const processedClips: ProcessedClip[] = videoResults.map(videoResult => {
+          const videoFilename = videoResult.metadata.filename;
+          
+          // Find matching subtitle and word timestamp files
+          const subtitleResult = subtitleResults.find(
+            s => s.metadata.video_filename === videoFilename
+          );
+          
+          const wordTimestampsResult = wordTimestampResults.find(
+            w => w.metadata.video_filename === videoFilename
+          );
+          
+          return {
+            videoResult,
+            subtitleResult,
+            wordTimestampsResult
+          };
+        });
+        
+        console.log("Processed clips:", processedClips);
+        
+        setProcessedClips(processedClips);
+        setUploadedVideo(prev => ({ ...prev, status: "completed" }));
+        
+        // Also maintain backward compatibility with old format
+        const clipFilenames = videoResults.map(v => v.metadata.filename);
+        const subtitleFilenames = subtitleResults.map(s => s.metadata.video_filename);
+        
+        setClipsList(clipFilenames);
+        setSubtitlesList(subtitleFilenames);
+      } else {
+        console.error("Invalid job details response:", detailsData);
+        setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+        setUploadStatus("Failed to process video: Invalid result format");
+      }
+    } catch (error) {
+      console.error("Error fetching job details:", error);
+      setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+      setUploadStatus("Failed to retrieve processing results");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Handle YouTube link import
   const handleImportYoutube = () => {
@@ -148,6 +374,8 @@ export default function HomeSidebar() {
   // Upload video to backend API
   const uploadVideo = async (file: File) => {
     setIsUploading(true);
+    setJobProgress(0);
+    setUploadStatus("Preparing your video...");
     
     const preview = URL.createObjectURL(file);
     
@@ -157,31 +385,50 @@ export default function HomeSidebar() {
       url: preview, 
       status: "processing",
       name: file.name,
-      size: file.size
+      size: file.size,
+      progress: 0
     });
     setVideosOpen(true);
     
     try {
-      const response = await processVideo(file, 3);
-      const data = await response.json();
-      console.log("API Response:", data);
-
-      if (data.status === "completed" && Array.isArray(data.clips)) {
-        setUploadedVideo(prev => ({ ...prev, status: "completed" }));
-        setClipsList(data.clips);
-        if (Array.isArray(data.subtitles)) {
-          console.log("Setting subtitles list:", data.subtitles);
-          setSubtitlesList(data.subtitles);
-        } else {
-          console.log("No subtitles array in response");
-        }
+      // Try using the new API first
+      console.log("Using new job-based API");
+      const jobResponse = await createVideoProcessingJob(file, 3, true, true);
+      const jobData = await jobResponse.json();
+      console.log("Job API Response:", jobData);
+      
+      if (jobData.job_id) {
+        // New API success
+        setJobId(jobData.job_id);
+        setUploadStatus(`Processing started. Estimated time: ${Math.round(jobData.estimated_completion_time || 60)} seconds`);
+        
+        // Start polling for job status
+        startPollingJobStatus(jobData.job_id);
       } else {
-        setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+        // Fall back to legacy API
+        console.log("Job API failed, falling back to legacy API");
+        const response = await processVideo(file, 3);
+        const data = await response.json();
+        console.log("Legacy API Response:", data);
+
+        if (data.status === "completed" && Array.isArray(data.clips)) {
+          setUploadedVideo(prev => ({ ...prev, status: "completed" }));
+          setClipsList(data.clips);
+          if (Array.isArray(data.subtitles)) {
+            console.log("Setting subtitles list:", data.subtitles);
+            setSubtitlesList(data.subtitles);
+          } else {
+            console.log("No subtitles array in response");
+          }
+          setIsUploading(false);
+        } else {
+          setUploadedVideo(prev => ({ ...prev, status: "failed" }));
+          setIsUploading(false);
+        }
       }
     } catch (error) {
       console.error("Error:", error);
       setUploadedVideo(prev => ({ ...prev, status: "failed" }));
-    } finally {
       setIsUploading(false);
     }
   };
@@ -200,6 +447,31 @@ export default function HomeSidebar() {
     accept: { "video/*": [] },
     multiple: false,
   });
+
+  // Helper function to ensure API URLs are complete
+  const getApiUrl = (urlPath: string): string => {
+    // If URL is already absolute, return it as is
+    if (urlPath.startsWith('http')) {
+      return urlPath;
+    }
+    
+    const apiBase = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000/api/v1';
+    
+    // Remove leading slash if present
+    const cleanPath = urlPath.startsWith('/') ? urlPath.substring(1) : urlPath;
+    
+    // Prevent path duplication (avoid /api/v1/api/v1/)
+    if (cleanPath.startsWith('api/v1/')) {
+      // If cleanPath already includes api/v1, remove it from the base URL
+      const baseWithoutApiPath = apiBase.endsWith('/api/v1') 
+        ? apiBase.slice(0, -7) // Remove trailing '/api/v1'
+        : apiBase;
+      return `${baseWithoutApiPath}/${cleanPath}`;
+    }
+    
+    // Normal case - just join the paths
+    return `${apiBase}/${cleanPath}`;
+  };
 
   const createBtns = [
     {
@@ -281,69 +553,144 @@ export default function HomeSidebar() {
             </div>
           </div>
 
-          {clipsList.length > 0 ? (
+          {/* My Shorts Section - Updated to support both APIs */}
+          {(processedClips.length > 0 || clipsList.length > 0) ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
-                {currentClips.map((clipFilename, index) => {
-                  const videoUrl = getVideoUrl(clipFilename);
-                  const subtitleUrl = subtitlesList[indexOfFirstClip + index] ? 
-                    getSubtitleUrl(subtitlesList[indexOfFirstClip + index]) : 
-                    null;
-                  const actualIndex = indexOfFirstClip + index;
-                  
-                  return (
-                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                      <div className="relative aspect-[9/16] bg-black">
-                        <video 
-                          className="w-full h-full object-cover"
-                          controls
-                          src={videoUrl}
-                          onError={(e) => {
-                            console.error("Video loading error for:", clipFilename, e);
-                          }}
-                        />
-                      </div>
-                      <div className="p-2">
-                        <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
-                        <div className="flex justify-between items-center mt-2">
-                          <a 
-                            href={videoUrl}
-                            download={clipFilename}
-                            className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Download size={14} />
-                            <span>Download</span>
-                          </a>
-                          <button 
-                            onClick={() => {
-                              // Get the video filename without the "final_" prefix
-                              const originalVideoName = clipFilename.replace('final_', '');
-                              // Get the corresponding subtitle filename
-                              const subtitleFile = subtitlesList[actualIndex];
-                              
-                              // Construct the URLs
-                              const videoUrl = getVideoUrl(clipFilename);
-                              const srtUrl = subtitleFile ? 
-                                getSubtitleUrl(subtitleFile) : '';
-                              
-                              // Navigate to edit page with both video and subtitle parameters
-                              const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
-                              const finalUrl = srtUrl ? `${editUrl}&srtUrl=${encodeURIComponent(srtUrl)}` : editUrl;
-                              
-                              router.push(finalUrl);
+                {/* New API display (primary) */}
+                {processedClips.length > 0 ? 
+                  currentProcessedClips.map((clip, index) => {
+                    const actualIndex = indexOfFirstClip + index;
+                    const { videoResult, subtitleResult, wordTimestampsResult } = clip;
+                    
+                    // Fix URLs to prevent duplication
+                    const videoUrl = videoResult.url.startsWith('http') 
+                      ? videoResult.url 
+                      : getApiUrl(videoResult.url);
+                      
+                    const subtitleUrl = subtitleResult?.url
+                      ? (subtitleResult.url.startsWith('http')
+                          ? subtitleResult.url
+                          : getApiUrl(subtitleResult.url))
+                      : null;
+                      
+                    const wordTimestampsUrl = wordTimestampsResult?.url
+                      ? (wordTimestampsResult.url.startsWith('http')
+                          ? wordTimestampsResult.url
+                          : getApiUrl(wordTimestampsResult.url))
+                      : null;
+                    
+                    console.log("Constructed video URL:", videoUrl);
+                    
+                    return (
+                      <div key={videoResult.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        <div className="relative aspect-[9/16] bg-black">
+                          <video 
+                            className="w-full h-full object-cover"
+                            controls
+                            src={videoUrl}
+                            onError={(e) => {
+                              console.error("Video loading error for:", videoResult.metadata.filename, e);
                             }}
-                            className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                          >
-                            <Edit2 size={14} />
-                            <span>Edit</span>
-                          </button>
+                          />
+                        </div>
+                        <div className="p-2">
+                          <h3 className="font-medium text-sm">
+                            {videoResult.metadata.title || `Short Clip ${actualIndex + 1}`}
+                          </h3>
+                          <div className="flex justify-between items-center mt-2">
+                            <a 
+                              href={videoUrl}
+                              download={videoResult.metadata.filename}
+                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Download size={14} />
+                              <span>Download</span>
+                            </a>
+                            <button 
+                              onClick={() => {
+                                // Navigate to edit page with both video and subtitle parameters
+                                const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(videoResult.metadata.filename)}`;
+                                const finalUrl = subtitleUrl ? `${editUrl}&srtUrl=${encodeURIComponent(subtitleUrl)}` : editUrl;
+                                
+                                console.log("Navigating to edit URL:", finalUrl);
+                                router.push(finalUrl);
+                              }}
+                              className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                            >
+                              <Edit2 size={14} />
+                              <span>Edit</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                  :
+                  // Legacy API display (fallback)
+                  currentClips.map((clipFilename, index) => {
+                    const videoUrl = getVideoUrl(clipFilename);
+                    const subtitleUrl = subtitlesList[indexOfFirstClip + index] ? 
+                      getSubtitleUrl(subtitlesList[indexOfFirstClip + index]) : 
+                      null;
+                    const actualIndex = indexOfFirstClip + index;
+                    
+                    return (
+                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        <div className="relative aspect-[9/16] bg-black">
+                          <video 
+                            className="w-full h-full object-cover"
+                            controls
+                            src={videoUrl}
+                            onError={(e) => {
+                              console.error("Video loading error for:", clipFilename, e);
+                            }}
+                          />
+                        </div>
+                        <div className="p-2">
+                          <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
+                          <div className="flex justify-between items-center mt-2">
+                            <a 
+                              href={videoUrl}
+                              download={clipFilename}
+                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Download size={14} />
+                              <span>Download</span>
+                            </a>
+                            <button 
+                              onClick={() => {
+                                // Get the video filename without the "final_" prefix
+                                const originalVideoName = clipFilename.replace('final_', '');
+                                // Get the corresponding subtitle filename
+                                const subtitleFile = subtitlesList[actualIndex];
+                                
+                                // Construct the URLs
+                                const videoUrl = getVideoUrl(clipFilename);
+                                const srtUrl = subtitleFile ? 
+                                  getSubtitleUrl(subtitleFile) : '';
+                                
+                                // Navigate to edit page with both video and subtitle parameters
+                                const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
+                                const finalUrl = srtUrl ? `${editUrl}&srtUrl=${encodeURIComponent(srtUrl)}` : editUrl;
+                                
+                                router.push(finalUrl);
+                              }}
+                              className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                            >
+                              <Edit2 size={14} />
+                              <span>Edit</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                }
               </div>
               
               {/* Pagination Controls */}
@@ -415,20 +762,45 @@ export default function HomeSidebar() {
                       <p className="text-sm text-gray-500 mt-1">
                         {uploadedVideo.size ? (uploadedVideo.size / (1024 * 1024)).toFixed(2) : 0} MB
                       </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        {uploadedVideo.status === "processing" && (
-                          <>
+                      
+                      {/* Status display */}
+                      {uploadedVideo.status === "processing" && (
+                        <div className="mt-2">
+                          {/* Progress bar */}
+                          <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2 mb-1">
+                            <div 
+                              className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                              style={{ width: `${uploadedVideo.progress || 0}%` }}
+                            ></div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 mt-2">
                             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                            <span className="text-blue-500">Processing...</span>
-                          </>
-                        )}
-                        {uploadedVideo.status === "completed" && (
-                          <span className="text-green-500">Processing complete</span>
-                        )}
-                        {uploadedVideo.status === "failed" && (
-                          <span className="text-red-500">Processing failed</span>
-                        )}
-                      </div>
+                            <span className="text-blue-500">
+                              {uploadStatus || "Processing..."}
+                              {uploadedVideo.progress ? ` (${Math.round(uploadedVideo.progress)}%)` : ''}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {uploadedVideo.status === "completed" && (
+                        <span className="text-green-500 flex items-center gap-1 mt-2">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          Processing complete
+                        </span>
+                      )}
+                      
+                      {uploadedVideo.status === "failed" && (
+                        <span className="text-red-500 flex items-center gap-1 mt-2">
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                          </svg>
+                          {uploadStatus || "Processing failed"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -479,7 +851,7 @@ export default function HomeSidebar() {
               </h3>
               <button 
                 onClick={() => setImportVideo(false)} 
-                disabled={isUploading}
+                // disabled={isUploading}
                 className="text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-full p-1.5 transition-colors"
               >
                 <X size={18} />
@@ -503,6 +875,16 @@ export default function HomeSidebar() {
                 <div className="text-center py-4">
                   <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <p className="text-gray-700 font-medium">{uploadStatus || "Processing your video..."}</p>
+                  
+                  {/* Progress bar */}
+                  {jobProgress > 0 && (
+                    <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mx-auto max-w-xs">
+                      <div 
+                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500" 
+                        style={{ width: `${jobProgress}%` }}
+                      ></div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

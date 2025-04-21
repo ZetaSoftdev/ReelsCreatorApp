@@ -31,7 +31,7 @@ const HomeHeader = ({pageName}: {pageName: string}) => {
               Admin Dashboard
             </Link>
           )}
-          <Link href="/help" className="text-gray-500 dark:text-gray-100 hover:text-gray-700">
+          <Link href="/dashboard/help" className="text-gray-500 dark:text-gray-100 hover:text-gray-700">
             <HelpCircle size={24} />
           </Link>
           {/* <ThemeToggle/> */}

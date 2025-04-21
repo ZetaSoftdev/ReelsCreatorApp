@@ -5,6 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
 import { Users, FileVideo, CreditCard, HardDrive, Clock, TrendingUp, Video, Star, DollarSign, Activity } from "lucide-react";
+import { ArrowUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 // Helper functions
 const formatBytes = (bytes: number, decimals = 2) => {
@@ -450,5 +452,47 @@ export default function AdminDashboard() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function StatsCard({
+  title,
+  value,
+  description,
+  icon,
+  trend,
+  trendUp,
+}: {
+  title: string;
+  value: string;
+  description: string;
+  icon: React.ReactNode;
+  trend: string;
+  trendUp: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex justify-between items-center">
+          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          {icon}
+        </div>
+        <CardDescription className="text-xs">{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex justify-between items-end">
+          <div className="text-2xl font-bold">{value}</div>
+          <div
+            className={cn(
+              "flex items-center text-xs font-medium",
+              trendUp ? "text-green-600" : "text-red-600"
+            )}
+          >
+            <ArrowUpDown className="mr-1 h-3 w-3" />
+            {trend}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 } 

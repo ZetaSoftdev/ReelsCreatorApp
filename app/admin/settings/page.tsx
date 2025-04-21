@@ -129,7 +129,9 @@ export default function SettingsPage() {
       try {
         setLoading(true);
         console.log('Fetching branding settings...');
-        const response = await fetch('/api/branding');
+        const response = await fetch('/api/branding', {
+          next: { revalidate: 3600 } // Revalidate every hour
+        });
         
         if (!response.ok) {
           console.error(`Failed to fetch branding settings: ${response.status} ${response.statusText}`);
@@ -232,7 +234,7 @@ export default function SettingsPage() {
         // Force a fresh fetch of the branding data to clear cache
         const cacheBuster = Date.now();
         await fetch(`/api/branding?t=${cacheBuster}`, {
-          cache: 'no-store',
+          next: { revalidate: 3600 }, // Revalidate every hour
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache'
