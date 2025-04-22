@@ -1,10 +1,8 @@
 {
   "siteName": "Editur",
+  "logoUrl": "/branding/logo.png",
+  "faviconUrl": "/branding/favicon.png",
   "primaryColor": "#8B5CF6",
   "accentColor": "#F59E0B",
-  "defaultFont": "Poppins",
-  "logoUrl": "/branding/logo_1744837093260.png",
-  "logoPath": "C:\\Users\\uzair\\Desktop\\dev\\new_trod\\public\\branding\\logo_1744837093260.png",
-  "faviconUrl": "/branding/favicon_1744837093267.png",
-  "faviconPath": "C:\\Users\\uzair\\Desktop\\dev\\new_trod\\public\\branding\\favicon_1744837093267.png"
+  "defaultFont": "Poppins"
 }
