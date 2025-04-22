@@ -25,39 +25,11 @@ export const loginWithCredentials = async (email: string, password: string) => {
     try {
         console.log(`Attempting login for email: ${email}`);
         
-        // First check if the user exists - with better error handling
-        let userExists = null;
-        try {
-            userExists = await prisma.user.findUnique({
-                where: { email },
-                select: { id: true, password: true }
-            });
-            
-            console.log(`User lookup result for ${email}: ${userExists ? 'found' : 'not found'}`);
-        } catch (dbError) {
-            console.error(`Database error during user lookup for ${email}:`, dbError);
-            
-            // Check for connection errors
-            const errorMessage = dbError instanceof Error ? dbError.message : String(dbError);
-            if (
-                errorMessage.includes("connection") || 
-                errorMessage.includes("ECONNREFUSED") || 
-                errorMessage.includes("timed out")
-            ) {
-                return { 
-                    success: false, 
-                    error: "Database connection error. Please try again later.",
-                    code: "DB_CONNECTION_ERROR" 
-                };
-            }
-            
-            // Other database errors
-            return { 
-                success: false, 
-                error: "Error verifying account. Please try again.",
-                code: "DB_ERROR" 
-            };
-        }
+        // First check if the user exists
+        const userExists = await prisma.user.findUnique({
+            where: { email },
+            select: { id: true, password: true }
+        });
         
         if (!userExists) {
             console.log(`User not found for email: ${email}`);
@@ -80,26 +52,16 @@ export const loginWithCredentials = async (email: string, password: string) => {
             
             console.log("Credential sign in successful");
             
-            // Get user data after successful login - with better error handling
-            let user = null;
-            try {
-                user = await prisma.user.findUnique({
-                    where: { email },
-                    select: {
-                        id: true,
-                        email: true,
-                        name: true,
-                        role: true
-                    }
-                });
-            } catch (userLookupError) {
-                console.error("Database error fetching user data after login:", userLookupError);
-                return { 
-                    success: true, 
-                    error: "Login successful but failed to load user data. Please refresh and try again.",
-                    partialSuccess: true 
-                };
-            }
+            // Get user data after successful login
+            const user = await prisma.user.findUnique({
+                where: { email },
+                select: {
+                    id: true,
+                    email: true,
+                    name: true,
+                    role: true
+                }
+            });
             
             if (!user) {
                 console.error("User not found after successful login - this should not happen");
@@ -132,19 +94,7 @@ export const loginWithCredentials = async (email: string, password: string) => {
             };
         } catch (signInError) {
             console.error("Error during NextAuth signIn:", signInError);
-            
-            // Specific handling for different types of NextAuth errors
-            if (signInError instanceof Error) {
-                if (signInError.message.includes("CredentialsSignin")) {
-                    return { success: false, error: "Invalid password" };
-                }
-                
-                if (signInError.message.includes("network") || signInError.message.includes("connection")) {
-                    return { success: false, error: "Authentication service unavailable. Please try again later." };
-                }
-            }
-            
-            return { success: false, error: "Authentication failed. Please try again." };
+            return { success: false, error: "Invalid password" };
         }
     } catch (error) {
         console.error("General error during credential login:", error);
@@ -156,92 +106,38 @@ export const loginWithCredentials = async (email: string, password: string) => {
                 error.message.includes("database") || 
                 error.message.includes("network")
             ) {
-                return { success: false, error: "Database connection error. Please try again later." };
+                return { success: false, error: "Database connection error" };
             }
         }
         
-        return { success: false, error: "Authentication service unavailable. Please try again later." };
+        return { success: false, error: "Authentication service unavailable" };
     }
 }
 
 export const signUpWithCredentials = async (name: string, email: string, password: string) => {
     try {
-        // Check if user already exists - with better error handling
-        let existingUser = null;
-        try {
-            existingUser = await prisma.user.findUnique({
-                where: { email }
-            });
-        } catch (dbLookupError) {
-            console.error("Database error during user existence check:", dbLookupError);
-            
-            // Check for connection errors
-            const errorMessage = dbLookupError instanceof Error ? dbLookupError.message : String(dbLookupError);
-            if (
-                errorMessage.includes("connection") || 
-                errorMessage.includes("ECONNREFUSED") || 
-                errorMessage.includes("timed out")
-            ) {
-                return { 
-                    success: false, 
-                    error: "Database connection error. Please try again later.",
-                    code: "DB_CONNECTION_ERROR" 
-                };
-            }
-            
-            return { 
-                success: false, 
-                error: "Error creating account. Please try again later.",
-                code: "DB_ERROR" 
-            };
-        }
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+            where: { email }
+        })
         
         if (existingUser) {
-            return { success: false, error: "Email already in use" };
+            return { success: false, error: "Email already in use" }
         }
         
         // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const hashedPassword = await bcrypt.hash(password, 10)
         
-        // Create user - with better error handling
-        try {
-            await prisma.user.create({
-                data: {
-                    name,
-                    email,
-                    password: hashedPassword,
-                    createdAt: new Date(),
-                    updatedAt: new Date()
-                }
-            });
-        } catch (createError) {
-            console.error("Database error during user creation:", createError);
-            
-            // Check for duplicate key errors (race condition where user was created in parallel)
-            const errorMessage = createError instanceof Error ? createError.message : String(createError);
-            if (errorMessage.includes("Unique constraint")) {
-                return { success: false, error: "Email already in use" };
+        // Create user
+        await prisma.user.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                createdAt: new Date(),
+                updatedAt: new Date()
             }
-            
-            // Check for connection errors
-            if (
-                errorMessage.includes("connection") || 
-                errorMessage.includes("ECONNREFUSED") || 
-                errorMessage.includes("timed out")
-            ) {
-                return { 
-                    success: false, 
-                    error: "Database connection error. Please try again later.",
-                    code: "DB_CONNECTION_ERROR" 
-                };
-            }
-            
-            return { 
-                success: false, 
-                error: "Error creating account. Please try again.",
-                code: "DB_ERROR" 
-            };
-        }
+        })
         
         // Sign in the user without redirect
         try {
@@ -249,23 +145,14 @@ export const signUpWithCredentials = async (name: string, email: string, passwor
                 email,
                 password,
                 redirect: false
-            });
-            return { success: true };
+            })
+            return { success: true }
         } catch (error) {
-            console.error("Error during auto-login after signup:", error);
-            // Even if auto-login fails, the account was created successfully
-            return { 
-                success: true, 
-                message: "Account created! Please log in.",
-                requireLogin: true
-            };
+            console.error("Error during auto-login after signup:", error)
+            return { success: true, message: "Account created! Please log in." }
         }
     } catch (error) {
-        console.error("Error during signup:", error);
-        return { 
-            success: false, 
-            error: "Failed to create account. Please try again later.",
-            code: "GENERAL_ERROR"
-        };
+        console.error("Error during signup:", error)
+        return { success: false, error: "Failed to create account" }
     }
 }
