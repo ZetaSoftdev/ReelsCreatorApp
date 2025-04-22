@@ -6,6 +6,19 @@ import bcrypt from "bcryptjs";
 import { Role } from './lib/constants';
 import { User } from 'next-auth';
 
+// Add a helper function for normalizing roles at the top of the file
+const normalizeRole = (role: any): Role => {
+  if (!role) return Role.USER;
+  
+  // Handle string values
+  if (typeof role === 'string') {
+    return role.toUpperCase() === 'ADMIN' ? Role.ADMIN : Role.USER;
+  }
+  
+  // Handle enum values or objects
+  return role === Role.ADMIN ? Role.ADMIN : Role.USER;
+};
+
 // Improved helper function to safely use Prisma with better error handling
 const safePrismaOperation = async (operation: () => Promise<any>, fallback: any = null) => {
   // Always check if we're in a browser environment first
@@ -138,9 +151,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               return true;
             }
             
-            // Add role and profile image to user object for Google authentication
+            // Add role with normalization to user object for Google authentication
             console.log("Setting existing user role from database:", existingUser.role);
-            user.role = existingUser.role;
+            user.role = normalizeRole(existingUser.role);
             
             // Always update the user with the Google profile image if coming from Google auth
             if (user.image && !existingUser.profileImage) {
@@ -169,9 +182,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           // Ensure ID is set
           session.user.id = token.sub;
           
-          // Add role from token to session with fallback to USER
+          // Add normalized role from token to session
           console.log("Setting user role from token:", token.role);
-          session.user.role = (token.role as Role) || Role.USER;
+          session.user.role = normalizeRole(token.role);
           console.log("User role set to:", session.user.role);
           
           // Get the latest user data from the database to ensure image and other data is fresh
@@ -206,10 +219,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
               if (userData.email) {
                 session.user.email = userData.email;
               }
-              // Explicitly set role from database if available
+              // Explicitly set normalized role from database if available
               if (userData.role) {
                 console.log("Updating role from database:", userData.role);
-                session.user.role = userData.role as Role;
+                session.user.role = normalizeRole(userData.role);
               }
             } else {
               console.log("No user data found for ID:", token.sub);
@@ -227,9 +240,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       },
       async jwt({ token, user, trigger, session }) {
         if (user) {
-          // Add ID and role to token
+          // Add ID and role to token with normalization
           token.id = user.id;
-          token.role = user.role || Role.USER;
+          token.role = normalizeRole(user.role);
           
           // Add image to token if it exists
           if (user.image) {

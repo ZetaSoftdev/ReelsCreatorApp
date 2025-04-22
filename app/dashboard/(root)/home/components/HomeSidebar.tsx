@@ -109,6 +109,42 @@ export default function HomeSidebar() {
     error?: string | null;
   }>({ file: null, url: "", status: null, error: null });
   const router = useRouter();
+  
+  // Add user state to store session data
+  const [user, setUser] = useState<{
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    role?: string;
+    image?: string | null;
+  } | null>(null);
+  
+  // Fetch session data from our API endpoint
+  useEffect(() => {
+    const fetchSession = async () => {
+      try {
+        // Add cache-busting parameter
+        const response = await fetch(`/api/user/session?t=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch session');
+        }
+        
+        const data = await response.json();
+        setUser(data.user);
+        
+        // Set isAdmin based on the user role
+        if (data.user?.role === Role.ADMIN) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error('Error fetching session:', error);
+      }
+    };
+    
+    fetchSession();
+  }, []);
 
   // Calculate total pages - updated to work with both new and old API responses
   const totalClipsCount = processedClips.length > 0 ? processedClips.length : clipsList.length;
@@ -153,20 +189,7 @@ export default function HomeSidebar() {
     }
   };
 
-  // Check if user is admin
-  useEffect(() => {
-    try {
-      const userData = localStorage.getItem('userData');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setIsAdmin(user.role === Role.ADMIN);
-      }
-    } catch (error) {
-      console.error("Error checking admin status:", error);
-    }
-  }, []);
-
-  // Load saved data from localStorage on component mount
+  // Only load clip data from localStorage, not user data
   useEffect(() => {
     const savedClips = localStorage.getItem('clipsList');
     const savedSubtitles = localStorage.getItem('subtitlesList');
@@ -493,8 +516,8 @@ export default function HomeSidebar() {
             console.error("Legacy API error:", errorText);
             throw new Error(`Legacy API error: ${response.status} ${response.statusText}`);
           }
-          
-          const data = await response.json();
+      
+      const data = await response.json();
           console.log("Legacy API Response:", data);
           
           // Check if the response contains an error
@@ -502,17 +525,17 @@ export default function HomeSidebar() {
             throw new Error(data.error || data.detail || "Processing failed");
           }
 
-          if (data.status === "completed" && Array.isArray(data.clips)) {
-            setUploadedVideo(prev => ({ ...prev, status: "completed" }));
-            setClipsList(data.clips);
-            if (Array.isArray(data.subtitles)) {
-              console.log("Setting subtitles list:", data.subtitles);
-              setSubtitlesList(data.subtitles);
-            } else {
-              console.log("No subtitles array in response");
-            }
+      if (data.status === "completed" && Array.isArray(data.clips)) {
+        setUploadedVideo(prev => ({ ...prev, status: "completed" }));
+        setClipsList(data.clips);
+        if (Array.isArray(data.subtitles)) {
+          console.log("Setting subtitles list:", data.subtitles);
+          setSubtitlesList(data.subtitles);
+        } else {
+          console.log("No subtitles array in response");
+        }
             setIsUploading(false);
-          } else {
+      } else {
             setUploadedVideo(prev => ({ 
               ...prev, 
               status: "failed",
@@ -759,63 +782,63 @@ export default function HomeSidebar() {
                   // Legacy API display (fallback)
                   currentClips.map((clipFilename, index) => {
                     const videoUrl = getVideoUrl(clipFilename);
-                    const subtitleUrl = subtitlesList[indexOfFirstClip + index] ? 
+                  const subtitleUrl = subtitlesList[indexOfFirstClip + index] ? 
                       getSubtitleUrl(subtitlesList[indexOfFirstClip + index]) : 
-                      null;
-                    const actualIndex = indexOfFirstClip + index;
-                    
-                    return (
-                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                        <div className="relative aspect-[9/16] bg-black">
-                          <video 
-                            className="w-full h-full object-cover"
-                            controls
-                            src={videoUrl}
-                            onError={(e) => {
-                              console.error("Video loading error for:", clipFilename, e);
-                            }}
-                          />
-                        </div>
-                        <div className="p-2">
-                          <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
-                          <div className="flex justify-between items-center mt-2">
-                            <a 
-                              href={videoUrl}
-                              download={clipFilename}
-                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Download size={14} />
-                              <span>Download</span>
-                            </a>
-                            <button 
-                              onClick={() => {
-                                // Get the video filename without the "final_" prefix
-                                const originalVideoName = clipFilename.replace('final_', '');
-                                // Get the corresponding subtitle filename
-                                const subtitleFile = subtitlesList[actualIndex];
-                                
-                                // Construct the URLs
+                    null;
+                  const actualIndex = indexOfFirstClip + index;
+                  
+                  return (
+                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <div className="relative aspect-[9/16] bg-black">
+                        <video 
+                          className="w-full h-full object-cover"
+                          controls
+                          src={videoUrl}
+                          onError={(e) => {
+                            console.error("Video loading error for:", clipFilename, e);
+                          }}
+                        />
+                      </div>
+                      <div className="p-2">
+                        <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
+                        <div className="flex justify-between items-center mt-2">
+                          <a 
+                            href={videoUrl}
+                            download={clipFilename}
+                            className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Download size={14} />
+                            <span>Download</span>
+                          </a>
+                          <button 
+                            onClick={() => {
+                              // Get the video filename without the "final_" prefix
+                              const originalVideoName = clipFilename.replace('final_', '');
+                              // Get the corresponding subtitle filename
+                              const subtitleFile = subtitlesList[actualIndex];
+                              
+                              // Construct the URLs
                                 const videoUrl = getVideoUrl(clipFilename);
-                                const srtUrl = subtitleFile ? 
+                              const srtUrl = subtitleFile ? 
                                   getSubtitleUrl(subtitleFile) : '';
-                                
-                                // Navigate to edit page with both video and subtitle parameters
-                                const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
-                                const finalUrl = srtUrl ? `${editUrl}&srtUrl=${encodeURIComponent(srtUrl)}` : editUrl;
-                                
-                                router.push(finalUrl);
-                              }}
-                              className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                            >
-                              <Edit2 size={14} />
-                              <span>Edit</span>
-                            </button>
-                          </div>
+                              
+                              // Navigate to edit page with both video and subtitle parameters
+                              const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
+                              const finalUrl = srtUrl ? `${editUrl}&srtUrl=${encodeURIComponent(srtUrl)}` : editUrl;
+                              
+                              router.push(finalUrl);
+                            }}
+                            className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                          >
+                            <Edit2 size={14} />
+                            <span>Edit</span>
+                          </button>
                         </div>
                       </div>
-                    );
+                    </div>
+                  );
                   })
                 }
               </div>
@@ -901,7 +924,7 @@ export default function HomeSidebar() {
                             ></div>
                           </div>
                           
-                          <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 mt-2">
                             <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
                             <span className="text-blue-500">
                               {uploadStatus || "Processing..."}
@@ -911,7 +934,7 @@ export default function HomeSidebar() {
                         </div>
                       )}
                       
-                      {uploadedVideo.status === "completed" && (
+                        {uploadedVideo.status === "completed" && (
                         <span className="text-green-500 flex items-center gap-1 mt-2">
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
@@ -920,9 +943,9 @@ export default function HomeSidebar() {
                         </span>
                       )}
                       
-                      {uploadedVideo.status === "failed" && (
+                        {uploadedVideo.status === "failed" && (
                         <ErrorDisplay error={uploadedVideo.error} />
-                      )}
+                        )}
                     </div>
                   </div>
                 </div>
@@ -1015,13 +1038,13 @@ export default function HomeSidebar() {
                 <div className="mt-6">
                   <label className="text-gray-700 font-medium block mb-2">Paste YouTube Link</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="https://www.youtube.com/watch?v=..."
+                  <input
+                    type="text"
+                    placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full border border-gray-300 p-3 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                      value={youtubeLink}
-                      onChange={(e) => setYoutubeLink(e.target.value)}
-                    />
+                    value={youtubeLink}
+                    onChange={(e) => setYoutubeLink(e.target.value)}
+                  />
                   </div>
                   <button
                     onClick={handleImportYoutube}

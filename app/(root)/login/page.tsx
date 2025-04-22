@@ -1,13 +1,20 @@
 "use client";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FaGoogle } from "react-icons/fa";
 import { signIn } from "@/auth";
 import { login, loginWithCredentials } from "@/lib/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useLogoContext } from "@/context/LogoContext";
+
+// Loading fallback for Suspense
+const LoginFormLoading = () => (
+  <div className="flex justify-center items-center min-h-screen">
+    <p>Loading...</p>
+  </div>
+);
 
 const LoginForm = () => {
     const [email, setEmail] = useState("");
@@ -16,28 +23,56 @@ const LoginForm = () => {
     const [loading, setLoading] = useState(false);
     const [checkingAuth, setCheckingAuth] = useState(true);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { branding } = useLogoContext();
+
+    // Clear user data from localStorage when the page loads
+    // especially if there's a logout parameter
+    useEffect(() => {
+        const clearUserData = () => {
+            try {
+                // Clear all potential user data from localStorage
+                localStorage.removeItem('userData');
+                localStorage.removeItem('clipsList');
+                localStorage.removeItem('subtitlesList');
+                localStorage.removeItem('processedClips');
+                localStorage.removeItem('uploadedVideo');
+                
+                // Also clear sessionStorage just to be safe
+                sessionStorage.clear();
+                
+                console.log("Cleared all user data from storage");
+            } catch (error) {
+                console.error("Error clearing storage:", error);
+            }
+        };
+        
+        // Always clear data on login page load
+        clearUserData();
+        
+        // Check if this is coming from a logout
+        const isLogout = searchParams.get('logout') === 'true';
+        if (isLogout) {
+            console.log("User logged out successfully");
+        }
+    }, [searchParams]);
 
     // Check if user is already logged in
     useEffect(() => {
         async function checkSession() {
             try {
-                // Use the client-side login functions instead of direct auth() call
-                // This prevents headers being called outside request scope
-                const userData = localStorage.getItem('userData');
-                if (userData) {
-                    try {
-                        const user = JSON.parse(userData);
-                        if (user.role === "ADMIN") {
-                            router.push("/admin/dashboard");
-                        } else {
-                            router.push("/dashboard/home");
-                        }
-                        return;
-                    } catch (e) {
-                        // Invalid JSON, clear it
-                        localStorage.removeItem('userData');
+                // Add cache-busting timestamp to prevent stale data
+                const response = await fetch('/api/auth/session?ts=' + Date.now());
+                const session = await response.json();
+                
+                if (session && session.user) {
+                    // Redirect based on role from the server session
+                    if (session.user.role === "ADMIN") {
+                        router.push("/admin/dashboard");
+                    } else {
+                        router.push("/dashboard/home");
                     }
+                    return;
                 }
             } catch (err) {
                 console.error("Error checking authentication:", err);
@@ -69,26 +104,18 @@ const LoginForm = () => {
                 return;
             }
             
-            // Store minimal user data in localStorage for client-side checks
+            // Redirect based on role returned from server
             if (result.user) {
-                console.log("Storing user data in localStorage:", {
-                    email: result.user.email,
-                    role: result.user.role
-                });
+                console.log("Login successful, redirecting based on role:", result.user.role);
                 
-                localStorage.setItem('userData', JSON.stringify({
-                    email: result.user.email,
-                    role: result.user.role,
-                    timestamp: new Date().getTime() // Add timestamp for freshness check
-                }));
+                // Add a timestamp to prevent caching and force a full page reload
+                const timestamp = Date.now();
                 
-                // Manually redirect based on role
+                // Use window.location.href instead of router.push() to force a full page reload
                 if (result.user.role === "ADMIN") {
-                    console.log("Redirecting to admin dashboard");
-                    router.push("/admin/dashboard");
+                    window.location.href = `/admin/dashboard?ts=${timestamp}`;
                 } else {
-                    console.log("Redirecting to user dashboard");
-                    router.push("/dashboard/home");
+                    window.location.href = `/dashboard/home?ts=${timestamp}`;
                 }
             }
         } catch (err) {
@@ -253,4 +280,11 @@ const LoginForm = () => {
     );
 };
 
-export default LoginForm;
+// Export a wrapper component with Suspense
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormLoading />}>
+      <LoginForm />
+    </Suspense>
+  );
+}

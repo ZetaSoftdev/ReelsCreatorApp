@@ -8,6 +8,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Role {
+  USER
+  ADMIN
+}
+
 model User {
   id           String        @id @default(cuid())
   email        String        @unique
@@ -99,9 +104,4 @@ model BrandingSettings {
   defaultFont  String   @default("Poppins")
   updatedAt    DateTime @updatedAt
   createdAt    DateTime @default(now())
-}
-
-enum Role {
-  USER
-  ADMIN
 }

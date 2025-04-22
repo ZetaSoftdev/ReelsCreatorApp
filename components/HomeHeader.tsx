@@ -4,22 +4,20 @@ import Link from 'next/link'
 import React, { useState, useEffect } from 'react'
 // import ThemeToggle from './ThemeToggle'
 import { Role } from '@/lib/constants'
+import { useSession } from 'next-auth/react'
 
 const HomeHeader = ({pageName}: {pageName: string}) => {
   const [isAdmin, setIsAdmin] = useState(false);
+  const { data: session, status } = useSession();
   
-  // Check if user is admin
+  // Check if user is admin based on session data instead of localStorage
   useEffect(() => {
-    try {
-      const userData = localStorage.getItem('userData');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setIsAdmin(user.role === Role.ADMIN);
-      }
-    } catch (error) {
-      console.error("Error checking admin status:", error);
+    if (session?.user?.role === Role.ADMIN) {
+      setIsAdmin(true);
+    } else {
+      setIsAdmin(false);
     }
-  }, []);
+  }, [session]); // Re-run when session changes
   
   return (
     <header className="flex justify-between items-center bg-lightGray px-10 py-4 shadow-md z-10">

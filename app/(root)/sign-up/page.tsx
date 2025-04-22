@@ -1,6 +1,6 @@
 "use client";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { FaGoogle } from "react-icons/fa";
@@ -9,6 +9,13 @@ import { login, signUpWithCredentials } from "@/lib/auth";
 import { User } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLogoContext } from "@/context/LogoContext";
+
+// Loading fallback for Suspense
+const SignupFormLoading = () => (
+  <div className="flex justify-center items-center min-h-screen">
+    <p>Loading...</p>
+  </div>
+);
 
 const SignupForm = () => {
     const [email, setEmail] = useState("");
@@ -19,6 +26,25 @@ const SignupForm = () => {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
     const { branding } = useLogoContext();
+
+    // Clear any existing user data from localStorage when the signup page loads
+    useEffect(() => {
+        try {
+            // Clear all potential user data from localStorage
+            localStorage.removeItem('userData');
+            localStorage.removeItem('clipsList');
+            localStorage.removeItem('subtitlesList');
+            localStorage.removeItem('processedClips');
+            localStorage.removeItem('uploadedVideo');
+            
+            // Also clear sessionStorage just to be safe
+            sessionStorage.clear();
+            
+            console.log("Cleared all user data from storage on signup page");
+        } catch (error) {
+            console.error("Error clearing storage:", error);
+        }
+    }, []);
 
     const handleSignUp = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -46,14 +72,17 @@ const SignupForm = () => {
             return;
         }
         
+        // Add a timestamp to prevent caching
+        const timestamp = Date.now();
+        
         if (result.message) {
             setSuccess(result.message);
             setTimeout(() => {
-                router.push("/login");
+                window.location.href = `/login?ts=${timestamp}`;
             }, 2000);
         } else {
-            // Successful signup and login
-            router.push("/dashboard/home");
+            // Use window.location.href instead of router.push() to force a full page reload
+            window.location.href = `/dashboard/home?ts=${timestamp}`;
         }
         
         setLoading(false);
@@ -228,4 +257,11 @@ const SignupForm = () => {
     );
 };
 
-export default SignupForm;
+// Export a wrapper component with Suspense
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<SignupFormLoading />}>
+      <SignupForm />
+    </Suspense>
+  );
+}

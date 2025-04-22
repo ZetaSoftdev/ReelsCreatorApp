@@ -33,29 +33,35 @@ import { CompanyLogo } from "./company-logo"
 import { useSession } from 'next-auth/react'
 import { GrSchedule, GrServices } from "react-icons/gr"
 import { MdAutoFixNormal } from "react-icons/md"
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useLogoContext } from "@/context/LogoContext"
 import { Role } from "@/lib/constants"
 import { useState, useEffect } from "react"
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const pathname = usePathname()
   const { branding } = useLogoContext()
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false)
+  const router = useRouter()
   
-  // Check if user is admin
+  // Check if user is admin based on session data
   useEffect(() => {
-    try {
-      const userData = localStorage.getItem('userData');
-      if (userData) {
-        const user = JSON.parse(userData);
-        setIsAdmin(user.role === Role.ADMIN);
-      }
-    } catch (error) {
-      console.error("Error checking admin status:", error);
+    // Set admin status based on session rather than localStorage
+    if (session?.user?.role === Role.ADMIN) {
+      setIsAdmin(true)
+    } else {
+      setIsAdmin(false)
     }
-  }, []);
+    
+    // If session status is loading, don't do anything yet
+    if (status === 'loading') return
+    
+    // If not authenticated, redirect to login
+    if (status === 'unauthenticated' && !pathname.includes('/login') && !pathname.includes('/sign-up')) {
+      router.push('/login')
+    }
+  }, [session, status, pathname, router])
 
   // This is sample data.
   const data = {

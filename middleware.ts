@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from './auth'
 import { Role } from './lib/constants'
 
+// Add a helper function at the top of the file
+const isAdmin = (role: any): boolean => {
+  if (!role) return false;
+  if (typeof role === 'string') return role.toUpperCase() === 'ADMIN';
+  return role === Role.ADMIN;
+};
+
 // The core middleware function
 export async function middleware(request: NextRequest) {
   // Get the pathname from the URL
@@ -43,7 +50,12 @@ export async function middleware(request: NextRequest) {
     '/',
     '/pricing',
     '/guides',
-    '/services'
+    '/services',
+    '/features',
+    '/contact',
+    '/about',
+    '/terms',
+    '/privacy'
   ].includes(path)
 
   // Define admin-only paths
@@ -67,7 +79,7 @@ export async function middleware(request: NextRequest) {
     
     // Redirect authenticated users away from login/signup pages
     if (['/login', '/sign-up'].includes(path)) {
-      if (userRole === Role.ADMIN) {
+      if (isAdmin(userRole)) {
         console.log(`[Middleware] Redirecting admin from login to admin dashboard`);
         return NextResponse.redirect(new URL('/admin/dashboard', request.url))
       } else {
@@ -77,7 +89,7 @@ export async function middleware(request: NextRequest) {
     }
     
     // Check admin page access
-    if (isAdminPath && userRole !== Role.ADMIN) {
+    if (isAdminPath && !isAdmin(userRole)) {
       console.log(`[Middleware] ⚠️ UNAUTHORIZED - User role ${userRole} attempted to access admin path ${path}`);
       return NextResponse.redirect(new URL('/unauthorized', request.url))
     }
