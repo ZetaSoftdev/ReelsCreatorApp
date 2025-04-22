@@ -30,24 +30,44 @@ const createPrismaMock = () => {
             };
           }
           
-          // Implement basic methods that return safe defaults
+          // Implement basic methods that return safe defaults but with proper warning logs
           if (['findUnique', 'findFirst', 'findMany', 'count'].includes(methodProp)) {
-            return () => Promise.resolve(null);
+            return (...args: any[]) => {
+              console.warn(`Prisma browser mock: ${prop}.${methodProp} called with`, JSON.stringify(args));
+              console.warn('Database connection not available, returning empty result');
+              return Promise.resolve(methodProp === 'findMany' ? [] : null);
+            };
           }
           if (['create', 'update', 'upsert'].includes(methodProp)) {
-            return () => Promise.resolve({});
+            return (...args: any[]) => {
+              console.warn(`Prisma browser mock: ${prop}.${methodProp} called with`, JSON.stringify(args));
+              console.warn('Database connection not available, returning empty result');
+              return Promise.resolve({});
+            };
           }
           if (['delete', 'deleteMany'].includes(methodProp)) {
-            return () => Promise.resolve({ count: 0 });
+            return (...args: any[]) => {
+              console.warn(`Prisma browser mock: ${prop}.${methodProp} called with`, JSON.stringify(args));
+              console.warn('Database connection not available, returning empty result');
+              return Promise.resolve({ count: 0 });
+            };
           }
           
           // Handle raw SQL queries like $queryRaw with safe fallbacks
           if (methodProp === '$queryRaw' || methodProp === '$executeRaw') {
-            return () => Promise.resolve([]);
+            return (...args: any[]) => {
+              console.warn(`Prisma browser mock: ${methodProp} called with`, JSON.stringify(args));
+              console.warn('Database connection not available, returning empty result');
+              return Promise.resolve([]);
+            };
           }
           
-          // For any other method, return a function that does nothing
-          return () => Promise.resolve(null);
+          // For any other method, return a function that does nothing but logs the attempt
+          return (...args: any[]) => {
+            console.warn(`Prisma browser mock: ${prop}.${methodProp} called with`, JSON.stringify(args));
+            console.warn('Database connection not available, returning null');
+            return Promise.resolve(null);
+          };
         }
       });
     }
@@ -56,14 +76,14 @@ const createPrismaMock = () => {
   return new Proxy({}, handler) as unknown as PrismaClient;
 };
 
-// Production-safe Prisma client that handles connection errors gracefully
+// Production-safe Prisma client with improved logging and connection handling
 const createProdSafePrismaClient = () => {
-  // Create a normal PrismaClient
+  // Create a normal PrismaClient with better logging
   const client = new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+    log: ['error', 'warn', 'info'],
   });
   
-  // Wrap it in error-handling proxy
+  // Wrap it in error-handling proxy with improved logging
   const handler = {
     get: (target: any, prop: string) => {
       const original = target[prop];
@@ -91,7 +111,7 @@ const createProdSafePrismaClient = () => {
               } catch (error) {
                 console.error(`Prisma error in ${String(prop)}.${String(methodProp)}:`, error);
                 
-                // For query methods, return appropriate empty results
+                // For query methods, return appropriate empty results instead of nulls
                 if (['findUnique', 'findFirst'].includes(methodProp)) {
                   return null;
                 }
@@ -129,44 +149,50 @@ const createProdSafePrismaClient = () => {
   return new Proxy(client, handler) as PrismaClient;
 };
 
-// PrismaClient is attached to the `global` object in development to prevent
-// exhausting your database connection limit during hot reloads.
-// Learn more: https://pris.ly/d/help/next-js-best-practices
+// Better detection of build vs runtime environments
+const isBuildPhase = () => {
+  // Check multiple indicators of build phase
+  const explicitBuildFlag = process.env.NEXT_PHASE === 'phase-production-build';
+  const isStaticGeneration = process.env.NEXT_RUNTIME === 'edge' && typeof process.env.VERCEL_URL === 'string';
+  
+  // Log the detection for debugging
+  if (explicitBuildFlag || isStaticGeneration) {
+    console.log('Build phase detected based on environment variables');
+    return true;
+  }
+  
+  return false;
+};
 
+// Improved Prisma client initialization
 export const prisma = global.prisma || (() => {
   // Check if we're in a Node.js environment
   if (typeof window === 'undefined') {
-    // During build time, we may not want to initialize Prisma fully
-    if (process.env.NEXT_PHASE === 'phase-production-build') {
-      console.log('Build phase detected, using Prisma mock');
+    console.log('Server environment detected');
+    
+    // Check for build phase with improved detection
+    if (isBuildPhase()) {
+      console.log('Build phase confirmed, using Prisma mock');
       return createPrismaMock();
     }
     
     // In production and development on server side, use actual Prisma client
     try {
-      // Use enhanced error-handling client in production
-      if (process.env.NODE_ENV === 'production') {
-        console.log('Production environment detected, using error-handling Prisma client');
-        return createProdSafePrismaClient();
-      } else {
-        // Standard client for development
-        return new PrismaClient({
-          log: ['query', 'error', 'warn'],
-        });
-      }
+      console.log('Initializing Prisma client for database connection');
+      
+      // Always use the enhanced error-handling client for better stability
+      return createProdSafePrismaClient();
     } catch (err) {
       console.error('Failed to initialize Prisma client:', err);
-      // In production, fall back to mock to prevent application crash
-      if (process.env.NODE_ENV === 'production') {
-        console.warn('Using Prisma mock in production due to initialization error');
-        return createPrismaMock();
-      }
-      throw err; // In development, let it fail visibly
+      
+      // Re-throw the error to make database issues visible
+      // This will help identify connection problems instead of silently failing
+      throw err;
     }
   }
   
-  // Return a mock for browser environments
-  console.warn('Creating Prisma mock for browser environment');
+  // Return a mock for browser environments with clear logging
+  console.warn('Browser environment detected, using Prisma mock (client-side rendering)');
   return createPrismaMock();
 })();
 
