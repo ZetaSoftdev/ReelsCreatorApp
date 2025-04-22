@@ -105,3 +105,67 @@
 //     }
 //   });
 // } 
+
+
+
+
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+
+export const runtime = 'nodejs';
+
+export async function GET() {
+  const startTime = Date.now();
+
+  const health = {
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'unknown',
+    databaseStatus: 'unknown',
+    databaseLatency: 0,
+    checks: {
+      database: false,
+      prisma: false
+    },
+    errors: [] as string[],
+    responseTime: 0
+  };
+
+  try {
+    const dbStart = Date.now();
+    // Safe raw query
+    await prisma.$queryRawUnsafe(`SELECT 1`);
+    health.databaseLatency = Date.now() - dbStart;
+    health.databaseStatus = 'connected';
+    health.checks.database = true;
+
+    // Check Prisma model access
+    try {
+      await prisma.user.count(); // Replace with any valid model name
+      health.checks.prisma = true;
+    } catch (prismaError: any) {
+      health.errors.push(`Prisma model error: ${prismaError.message}`);
+    }
+  } catch (err: any) {
+    health.status = 'error';
+    health.databaseStatus = 'error';
+    health.errors.push(`Database error: ${err.message}`);
+    if (process.env.NODE_ENV !== 'production') {
+      (health as any).debug = {
+        error: err.message,
+        stack: err.stack
+      };
+    }
+  }
+
+  health.responseTime = Date.now() - startTime;
+
+  return NextResponse.json(health, {
+    status: health.status === 'ok' ? 200 : 503,
+    headers: {
+      'Cache-Control': 'no-store, max-age=0',
+      'Content-Type': 'application/json'
+    }
+  });
+}
