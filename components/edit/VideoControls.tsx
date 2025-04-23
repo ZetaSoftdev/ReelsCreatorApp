@@ -112,7 +112,7 @@ const VideoControls: React.FC<VideoControlsProps> = ({ videoRef }) => {
 
   return (
     <div className='flex items-center justify-between w-full px-4 py-4 shadow-2xl bg-neutral-200'>
-      <span>{new Date(currentTime * 1000).toISOString().substr(14, 5)}</span>
+      <span>{new Date(currentTime * 1000).toISOString().substr(14, 8)}</span>
       <div className='flex items-center gap-5'>
         <button onClick={handleGoToStart} aria-label="Go to start"><FaStepBackward /></button>
         <button onClick={handleBackward} aria-label="Rewind 10 seconds"><FaBackward /></button>
@@ -128,7 +128,7 @@ const VideoControls: React.FC<VideoControlsProps> = ({ videoRef }) => {
           {playbackRate}{"x"}
         </button>
       </div>
-      <span>{new Date(duration * 1000).toISOString().substr(14, 5)}</span>
+      <span>{new Date(duration * 1000).toISOString().substr(14, 8)}</span>
     </div>
   );
 };

@@ -1,98 +1,94 @@
 /**
- * API utility functions for making requests to the external API
+ * API utility functions for making requests to the external API for video processing
  */
 
-// Original API endpoint from environment variables
-const ORIGINAL_API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://localhost:8000/api/v1';
+// API endpoint from environment variables
+const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://reels-creator-alb-555953912.us-west-1.elb.amazonaws.com/api/v1';
 
-// Determine if we need to use the proxy (in browser) or direct connection (server-side)
-const isBrowser = typeof window !== 'undefined';
-
-// Use our proxy when in the browser to avoid mixed content issues
-export const API_ENDPOINT = isBrowser 
-  ? '/api/proxy' // Use local proxy to avoid HTTPS/HTTP mixed content issues
-  : ORIGINAL_API_ENDPOINT; // Direct connection on server-side
+// Helper function to ensure URLs are properly formatted with the API endpoint
+const formatApiUrl = (url: string): string => {
+  if (!url) return '';
+  
+  // If the URL already starts with http:// or https://, return it as is
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  
+  // If it's a relative path starting with /api/v1, prepend the API endpoint base
+  if (url.startsWith('/api/v1/')) {
+    // Remove the /api/v1 prefix since API_ENDPOINT already includes it
+    return `${API_ENDPOINT}${url.substring(7)}`;
+  }
+  
+  // For other relative paths, just append to API_ENDPOINT
+  return `${API_ENDPOINT}/${url.startsWith('/') ? url.substring(1) : url}`;
+};
 
 /**
- * Generate a full URL for the external API
- * @param path - The path to append to the API endpoint
- * @returns The complete URL
+ * Create a new video processing job
+ * @param file - The video file to process
+ * @param numClips - Number of clips to generate (default: 3)
+ * @returns The API response with job ID and status
  */
-export function getApiUrl(path: string): string {
-  // Remove leading slash if present to avoid double slashes
-  const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-  return `${API_ENDPOINT}/${cleanPath}`;
+export async function createVideoProcessingJob(
+  file: File, 
+  numClips: number = 3
+): Promise<Response> {
+  const formData = new FormData();
+  formData.append("video", file);
+  formData.append("num_clips", numClips.toString());
+  
+  return fetch(`${API_ENDPOINT}/jobs/video`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': 'test-key-123'
+    },
+    body: formData
+  });
 }
 
 /**
- * Make a GET request to the external API
- * @param path - The API path
- * @param options - Additional fetch options
- * @returns The fetch response
+ * Get the status of a job
+ * @param jobId - The job ID to check
+ * @returns The API response with job status
  */
-export async function apiGet(path: string, options: RequestInit = {}) {
-  const url = getApiUrl(path);
-  return fetch(url, {
+export async function getJobStatus(jobId: string): Promise<Response> {
+  return fetch(`${API_ENDPOINT}/jobs/${jobId}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': 'test-key-123', // Your API key here
-      ...options.headers,
-    },
-    mode: 'cors', // Explicitly set CORS mode
-    credentials: 'same-origin',
-    ...options,
+      'X-API-Key': 'test-key-123'
+    }
   });
 }
 
 /**
- * Make a POST request to the external API
- * @param path - The API path
- * @param data - The data to send
- * @param options - Additional fetch options
- * @returns The fetch response
+ * Get the detailed results of a completed job
+ * @param jobId - The job ID to get results for
+ * @returns The API response with job details and results
  */
-export async function apiPost(path: string, data: any, options: RequestInit = {}) {
-  const url = getApiUrl(path);
-  
-  // If data is FormData, don't set Content-Type (browser will set it with boundary)
-  const headers = data instanceof FormData 
-    ? { 
-        'X-API-Key': 'test-key-123', // Your API key here
-        ...options.headers 
-      }
-    : { 
-        'Content-Type': 'application/json',
-        'X-API-Key': 'test-key-123', // Your API key here
-        ...options.headers,
-      };
-  
-  return fetch(url, {
-    method: 'POST',
-    headers,
-    body: data instanceof FormData ? data : JSON.stringify(data),
-    mode: 'cors', // Explicitly set CORS mode
-    credentials: 'same-origin',
-    ...options,
+export async function getJobDetails(jobId: string): Promise<Response> {
+  return fetch(`${API_ENDPOINT}/jobs/${jobId}/details`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': 'test-key-123'
+    }
   });
 }
 
 /**
- * Make a DELETE request to the external API
- * @param path - The API path
- * @param options - Additional fetch options
- * @returns The fetch response
+ * Cancel a job
+ * @param jobId - The job ID to cancel
+ * @returns The API response
  */
-export async function apiDelete(path: string, options: RequestInit = {}) {
-  const url = getApiUrl(path);
-  return fetch(url, {
+export async function cancelJob(jobId: string): Promise<Response> {
+  return fetch(`${API_ENDPOINT}/jobs/${jobId}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': 'test-key-123', // Your API key here
-      ...options.headers,
-    },
-    ...options,
+      'X-API-Key': 'test-key-123'
+    }
   });
 }
 
@@ -102,10 +98,11 @@ export async function apiDelete(path: string, options: RequestInit = {}) {
  * @returns The complete video URL
  */
 export function getVideoUrl(filename: string): string {
-  // Use our proxy for media URLs to avoid mixed content issues
-  return isBrowser 
-    ? `/api/proxy/videos/${encodeURIComponent(filename)}` 
-    : getApiUrl(`videos/${encodeURIComponent(filename)}`);
+  // Handle case where filename is already a complete URL or path
+  if (filename.startsWith('http://') || filename.startsWith('https://') || filename.startsWith('/api/v1/')) {
+    return formatApiUrl(filename);
+  }
+  return formatApiUrl(`videos/${encodeURIComponent(filename)}`);
 }
 
 /**
@@ -114,10 +111,11 @@ export function getVideoUrl(filename: string): string {
  * @returns The complete subtitle URL
  */
 export function getSubtitleUrl(filename: string): string {
-  // Use our proxy for media URLs to avoid mixed content issues
-  return isBrowser 
-    ? `/api/proxy/subtitles/${encodeURIComponent(filename)}` 
-    : getApiUrl(`subtitles/${encodeURIComponent(filename)}`);
+  // Handle case where filename is already a complete URL or path
+  if (filename.startsWith('http://') || filename.startsWith('https://') || filename.startsWith('/api/v1/')) {
+    return formatApiUrl(filename);
+  }
+  return formatApiUrl(`subtitles/${encodeURIComponent(filename)}`);
 }
 
 /**
@@ -126,100 +124,9 @@ export function getSubtitleUrl(filename: string): string {
  * @returns The word timestamps URL
  */
 export function getWordTimestampsUrl(filename: string): string {
-  // Use our proxy for media URLs to avoid mixed content issues
-  return isBrowser 
-    ? `/api/proxy/word-timestamps/${encodeURIComponent(filename)}` 
-    : getApiUrl(`word-timestamps/${encodeURIComponent(filename)}`);
-}
-
-/**
- * Process a video file using the legacy API
- * @param file - The video file to process
- * @param numClips - Number of clips to generate
- * @returns The API response
- */
-export async function processVideo(file: File, numClips: number = 3) {
-  const formData = new FormData();
-  formData.append("video", file);
-  formData.append("num_clips", numClips.toString());
-  
-  return apiPost('process-video', formData);
-}
-
-/**
- * Create a new video processing job with the new API
- * @param file - The video file to process
- * @param numClips - Number of clips to generate
- * @param autocaption - Whether to add captions to clips
- * @param generateSrt - Whether to generate SRT subtitle files
- * @returns The API response with job ID and status
- */
-export async function createVideoProcessingJob(
-  file: File, 
-  numClips: number = 3, 
-  autocaption: boolean = true,
-  generateSrt: boolean = true
-) {
-  const formData = new FormData();
-  formData.append("video", file);
-  formData.append("num_clips", numClips.toString());
-  formData.append("autocaption", autocaption.toString());
-  formData.append("generate_srt", generateSrt.toString());
-  
-  return apiPost('jobs/video', formData);
-}
-
-/**
- * Get the status of a job
- * @param jobId - The job ID to check
- * @returns The API response with job status
- */
-export async function getJobStatus(jobId: string) {
-  return apiGet(`jobs/${jobId}`);
-}
-
-/**
- * Get the detailed results of a completed job
- * @param jobId - The job ID to get results for
- * @returns The API response with job details and results
- */
-export async function getJobDetails(jobId: string) {
-  return apiGet(`jobs/${jobId}/details`);
-}
-
-/**
- * List all jobs with optional filtering
- * @param status - Optional filter by job status (pending, processing, completed, failed)
- * @param limit - Maximum number of jobs to return
- * @param offset - Offset for pagination
- * @returns The API response with job list
- */
-export async function listJobs(status?: string, limit: number = 20, offset: number = 0) {
-  let queryParams = '';
-  
-  if (status) {
-    queryParams += `status=${status}`;
+  // Handle case where filename is already a complete URL or path
+  if (filename.startsWith('http://') || filename.startsWith('https://') || filename.startsWith('/api/v1/')) {
+    return formatApiUrl(filename);
   }
-  
-  if (limit !== 20) {
-    queryParams += queryParams ? '&' : '';
-    queryParams += `limit=${limit}`;
-  }
-  
-  if (offset !== 0) {
-    queryParams += queryParams ? '&' : '';
-    queryParams += `offset=${offset}`;
-  }
-  
-  const path = queryParams ? `jobs?${queryParams}` : 'jobs';
-  return apiGet(path);
-}
-
-/**
- * Cancel a job
- * @param jobId - The job ID to cancel
- * @returns The API response
- */
-export async function cancelJob(jobId: string) {
-  return apiDelete(`jobs/${jobId}`);
+  return formatApiUrl(`word-timestamps/${encodeURIComponent(filename)}`);
 }

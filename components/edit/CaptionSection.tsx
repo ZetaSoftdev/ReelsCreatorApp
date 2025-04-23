@@ -12,11 +12,12 @@ interface CaptionSectionProps {
 }
 
 const CaptionSection = ({ subtitles }: CaptionSectionProps) => {
-  // Helper function to format time in MM:SS format
+  // Helper function to format time in MM:SS:MS format including milliseconds
   const formatTime = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
-    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    const milliseconds = Math.floor((seconds % 1) * 1000);
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
   };
 
   return (
@@ -40,7 +41,7 @@ const CaptionSection = ({ subtitles }: CaptionSectionProps) => {
           <Card>
             <CardContent className="p-4">
               <p className="text-sm">00:11 - 00:92</p>
-              <p className="text-lg font-semibold">Hello et bienvenue sur</p>
+              <p className="text-lg font-semibold">sample text</p>
             </CardContent>
           </Card>
         )}

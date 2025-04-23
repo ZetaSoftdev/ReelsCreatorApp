@@ -2,7 +2,7 @@
 import AutoTranslateSection from "@/components/edit/AutoTranslateSection";
 import CropSection from "@/components/edit/CropSection";
 import CaptionSection from "@/components/edit/CaptionSection";
-import EditSection from "@/components/edit/EditSection";
+import EditSection, { CaptionPreset, PRESET_OPTIONS } from "@/components/edit/EditSection";
 import Navbar from "@/components/edit/Navbar";
 import Timeline from "@/components/edit/Timeline";
 import VideoControls from "@/components/edit/VideoControls";
@@ -16,17 +16,37 @@ interface Subtitle {
   text: string;
 }
 
+interface Word {
+  word: string;
+  start: number;
+  end: number;
+}
+
+interface Segment {
+  id: number;
+  start: number;
+  end: number;
+  text: string;
+  words: Word[];
+}
+
+interface WordTimestamps {
+  text: string;
+  segments: Segment[];
+}
+
 // Create a client component that uses searchParams
 function VideoEditorContent() {
   const searchParams = useSearchParams();
   const videoUrl = searchParams.get("videoUrl");
-  const srtUrl = searchParams.get("srtUrl");
+  const wordTimestampsUrl = searchParams.get("wordTimestampsUrl");
   const videoName = searchParams.get("videoName");
 
   const [videoSrc, setVideoSrc] = useState<string>("");
   const [isYoutube, setIsYoutube] = useState(false);
   const [selectedTool, setSelectedTool] = useState("caption");
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+  const [selectedPreset, setSelectedPreset] = useState<CaptionPreset | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null) as RefObject<HTMLVideoElement>;
 
   useEffect(() => {
@@ -35,177 +55,101 @@ function VideoEditorContent() {
       setIsYoutube(videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"));
     }
   }, [videoUrl]);
-console.log("subtitle in edit page: ",srtUrl)
-  // Load and parse the SRT file
+
+  console.log("word timestamps in edit page: ", wordTimestampsUrl);
+  
+  // Load and parse the word timestamps JSON file
   useEffect(() => {
-    const loadSubtitles = async () => {
-      if (!srtUrl) {
-        console.log("No srtUrl provided");
+    const loadWordTimestamps = async () => {
+      if (!wordTimestampsUrl) {
+        console.log("No wordTimestampsUrl provided");
         return;
       }
       
       try {
-        const decodedUrl = decodeURIComponent(srtUrl);
-        console.log("Attempting to fetch subtitles from:", decodedUrl);
+        const decodedUrl = decodeURIComponent(wordTimestampsUrl);
+        console.log("Attempting to fetch word timestamps from:", decodedUrl);
         
         const response = await fetch(decodedUrl);
-        console.log("Subtitle response status:", response.status);
+        console.log("Word timestamps response status:", response.status);
         
-        const text = await response.text();
-        console.log("Received subtitle text:", text.substring(0, 100) + "..."); // Show first 100 chars
+        const jsonData = await response.json();
+        console.log("Received word timestamps data:", jsonData);
         
-        // Parse SRT file
-        const parsedSubtitles = parseSRT(text);
-        console.log("Parsed subtitles:", parsedSubtitles);
+        // Parse word timestamps to the subtitle format
+        const parsedSubtitles = parseWordTimestamps(jsonData);
+        console.log("Parsed subtitles from word timestamps:", parsedSubtitles);
         setSubtitles(parsedSubtitles);
       } catch (error) {
-        console.error("Error loading subtitles:", error);
+        console.error("Error loading word timestamps:", error);
       }
     };
     
-    loadSubtitles();
-  }, [srtUrl]);
+    loadWordTimestamps();
+  }, [wordTimestampsUrl]);
 
-  // Helper function to parse timestamp to seconds
-  const parseTimestamp = (timestamp: string): number => {
-    const [time, milliseconds] = timestamp.split(/[,\.]/);
-    const [hours, minutes, seconds] = time.split(':').map(Number);
-    return hours * 3600 + minutes * 60 + seconds + Number(milliseconds) / 1000;
+  // Handle preset selection from EditSection
+  const handlePresetChange = (preset: CaptionPreset) => {
+    setSelectedPreset(preset);
   };
 
-  // Helper function to parse WebVTT format
-  const parseWebVTT = (content: string): Subtitle[] => {
-    const lines = content.split('\n');
-    const subtitles: Subtitle[] = [];
-    let currentSubtitle: Partial<Subtitle> = {};
-    let collectingText = false;
-
-    lines.forEach(line => {
-      if (line.includes(' --> ')) {
-        const [start, end] = line.split(' --> ');
-        currentSubtitle.startTime = parseTimestamp(start);
-        currentSubtitle.endTime = parseTimestamp(end);
-        collectingText = true;
-      } else if (collectingText && line.trim()) {
-        if (!currentSubtitle.text) {
-          currentSubtitle.text = line;
-        } else {
-          currentSubtitle.text += '\n' + line;
-        }
-      } else if (collectingText && !line.trim()) {
-        if (currentSubtitle.text) {
-          subtitles.push(currentSubtitle as Subtitle);
-          currentSubtitle = {};
-          collectingText = false;
-        }
-      }
-    });
-
-    if (currentSubtitle.text) {
-      subtitles.push(currentSubtitle as Subtitle);
-    }
-
-    return subtitles;
+  // Format seconds to MM:SS:MS display format (including milliseconds)
+  const formatDisplayTime = (timeInSeconds: number): string => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    const milliseconds = Math.floor((timeInSeconds % 1) * 1000);
+    
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
   };
 
-  // Enhanced SRT parser with improved format support
-  const parseSRT = (srtContent: string): Subtitle[] => {
+  // Parse word timestamps JSON into the subtitle format needed by the UI
+  const parseWordTimestamps = (data: any): Subtitle[] => {
     try {
-      const parsedSubtitles: Subtitle[] = [];
-      
-      // Normalize line endings
-      const normalizedContent = srtContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-      
-      // First check if it might be JSON format
-      if (normalizedContent.trim().startsWith('{') || normalizedContent.trim().startsWith('[')) {
-        try {
-          const jsonData = JSON.parse(normalizedContent);
-          console.log('Detected JSON format subtitles');
-          
-          // Handle JSON format (assuming array of objects with start, end, text)
-          if (Array.isArray(jsonData)) {
-            console.log(`Found ${jsonData.length} JSON subtitle entries`);
-            return jsonData.map(item => ({
-              startTime: typeof item.start === 'number' ? item.start : 
-                        typeof item.startTime === 'number' ? item.startTime : 0,
-              endTime: typeof item.end === 'number' ? item.end : 
-                      typeof item.endTime === 'number' ? item.endTime : 0,
-              text: item.text || item.content || ''
-            }));
-          }
-        } catch (e) {
-          console.log('JSON parsing failed, continuing with SRT parsing');
-        }
+      if (!data.segments || !Array.isArray(data.segments)) {
+        console.error("Invalid word timestamps format: missing segments array");
+        return [];
       }
+
+      const subtitles: Subtitle[] = [];
       
-      // Check for WebVTT format
-      if (normalizedContent.includes('WEBVTT')) {
-        console.log('Detected WebVTT format');
-        return parseWebVTT(normalizedContent);
-      }
-      
-      // Standard SRT processing
-      // Split the SRT content by double newline (subtitle blocks)
-      const blocks = normalizedContent.trim().split(/\n\n+/);
-      console.log(`Processing ${blocks.length} subtitle blocks`);
-      
-      blocks.forEach((block, index) => {
-        try {
-          const lines = block.split(/\n/);
+      // Process each segment
+      data.segments.forEach((segment: any) => {
+        // Group words into chunks of approximately 4 words each
+        if (segment.words && Array.isArray(segment.words)) {
+          const words = segment.words;
+          const wordsPerLine = 4; // Display 4 words per line
           
-          // Skip if not enough lines for a valid subtitle
-          if (lines.length < 2) {
-            return;
-          }
-          
-          // Find the timestamp line (format: 00:00:00,000 --> 00:00:00,000)
-          let timestampLine = '';
-          let textLines: string[] = [];
-          
-          // Search for the timestamp line (it should contain ' --> ')
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes(' --> ')) {
-              timestampLine = lines[i];
-              textLines = lines.slice(i + 1);
-              break;
-            }
-          }
-          
-          if (!timestampLine) {
-            return;
-          }
-          
-          // Parse timestamps using regex that handles both comma and period separators
-          const timestampMatch = timestampLine.match(/(\d{1,2}:\d{1,2}:\d{1,2}[,\.]\d{1,3}) --> (\d{1,2}:\d{1,2}:\d{1,2}[,\.]\d{1,3})/);
-          
-          if (timestampMatch) {
-            const startTimeStr = timestampMatch[1];
-            const endTimeStr = timestampMatch[2];
+          for (let i = 0; i < words.length; i += wordsPerLine) {
+            const wordChunk = words.slice(i, i + wordsPerLine);
+            if (wordChunk.length === 0) continue;
             
-            // Convert timestamp to seconds
-            const startTime = parseTimestamp(startTimeStr);
-            const endTime = parseTimestamp(endTimeStr);
+            // Get start time from first word and end time from last word
+            const startTime = wordChunk[0].start;
+            const endTime = wordChunk[wordChunk.length - 1].end;
             
-            // Only include the actual text without timestamp
-            const text = textLines.join('\n').trim();
+            // Create text by joining the words
+            const text = wordChunk.map((w: any) => w.word).join(' ');
             
-            if (text) {
-              parsedSubtitles.push({
-                startTime,
-                endTime,
-                text
-              });
-            }
+            // Add to subtitles array
+            subtitles.push({
+              startTime,
+              endTime,
+              text
+            });
           }
-        } catch (blockError) {
-          console.error(`Error parsing block ${index}:`, blockError);
+        } else {
+          // Fallback if words array is missing or invalid
+          subtitles.push({
+            startTime: segment.start,
+            endTime: segment.end,
+            text: segment.text
+          });
         }
       });
       
-      console.log(`Successfully parsed ${parsedSubtitles.length} out of ${blocks.length} subtitle blocks`);
-      return parsedSubtitles;
+      return subtitles;
     } catch (error) {
-      console.error('Error in SRT parser:', error);
+      console.error("Error parsing word timestamps:", error);
       return [];
     }
   };
@@ -228,7 +172,7 @@ console.log("subtitle in edit page: ",srtUrl)
         <div className="w-1/3 p-4 bg-bgWhite border-r shadow-md overflow-y-auto">
           {selectedTool === "crop" && <CropSection />}
           {selectedTool === "caption" && <CaptionSection subtitles={subtitles} />}
-          {selectedTool === "style" && <EditSection />}
+          {selectedTool === "style" && <EditSection onPresetChange={handlePresetChange} />}
           {selectedTool === "translate" && <AutoTranslateSection />}
         </div>
 
@@ -237,9 +181,10 @@ console.log("subtitle in edit page: ",srtUrl)
           {/* Video Preview */}
           <div className="flex-grow">
             <VideoPreview 
-              videoSrc={videoSrc} 
-              isYoutube={isYoutube} 
-              videoRef={videoRef} 
+              videoUrl={videoSrc}
+              selectedPreset={selectedPreset || PRESET_OPTIONS.find((p: CaptionPreset) => p.id === 'minimal')!}
+              wordTimestampsUrl={wordTimestampsUrl ? decodeURIComponent(wordTimestampsUrl) : undefined}
+              videoRef={videoRef}
             />
           </div>
 

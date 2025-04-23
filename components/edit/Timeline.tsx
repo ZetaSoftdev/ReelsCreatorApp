@@ -245,7 +245,7 @@ const TimeLine: React.FC<VideoEditorProps> = ({ videoUrl, subtitles, onCutVideo,
       >
         {frames.map((frame, index) => (
           <div key={index} className='w-[120px] mb-2'>
-            <div style={{ textAlign: 'start', fontSize: '12px' }} className=''>
+            <div style={{ textAlign: 'start', fontSize: '12px' }} className='ml-[-10px]'>
               {formatTime(frame.time)}
             </div>
             <div className='flex gap-4'>
