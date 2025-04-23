@@ -121,6 +121,7 @@ export async function GET(request: Request) {
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
     
+    /* Original code that uses $queryRaw
     const videoUploadTrend = await prisma.$queryRaw`
       SELECT DATE(v."uploadedAt") as date, COUNT(*) as count
       FROM "Video" v
@@ -128,6 +129,31 @@ export async function GET(request: Request) {
       GROUP BY DATE(v."uploadedAt")
       ORDER BY date ASC
     `;
+    */
+    
+    // Simpler version that doesn't use raw SQL
+    const videosForTrend = await prisma.video.findMany({
+      where: {
+        uploadedAt: {
+          gte: thirtyDaysAgo
+        }
+      },
+      select: {
+        uploadedAt: true
+      }
+    });
+    
+    // Process the data to get daily counts
+    const dailyCounts = new Map();
+    videosForTrend.forEach(video => {
+      const dateString = video.uploadedAt.toISOString().split('T')[0];
+      dailyCounts.set(dateString, (dailyCounts.get(dateString) || 0) + 1);
+    });
+    
+    const videoUploadTrend = Array.from(dailyCounts.entries()).map(([date, count]) => ({
+      date,
+      count
+    })).sort((a, b) => a.date.localeCompare(b.date));
     
     return NextResponse.json({
       videos,

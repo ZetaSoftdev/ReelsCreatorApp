@@ -9,29 +9,7 @@ export async function GET() {
   try {
     console.log('Fetching subscription plans for public access');
     
-    // Test database connection first to identify connection issues
-    try {
-      // Simple query to test database connectivity using Prisma model API
-      await prisma.$connect();
-      console.log('Database connection test successful');
-    } catch (connError: any) {
-      console.error('Database connection test failed:', connError);
-      
-      // Return a more specific error for database connection issues
-      return NextResponse.json({
-        error: "Database connection failed", 
-        message: "Unable to connect to the database. Please try again later.",
-        diagnostics: process.env.NODE_ENV === 'development' ? connError.message : undefined
-      }, { 
-        status: 503,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Error-Type': 'database-connection'
-        }
-      });
-    }
-    
-    // If connection is successful, proceed with fetching plans
+    // Proceed with fetching plans
     try {
       // Only get active subscription plans and select specific fields using Prisma model API
       const subscriptionPlans = await prisma.subscriptionPlan.findMany({

@@ -64,28 +64,36 @@ const SignupForm = () => {
             return;
         }
 
-        const result = await signUpWithCredentials(userName, email, password);
-        
-        if (!result.success) {
-            setError(result.error || "Failed to sign up");
+        try {
+            const result = await signUpWithCredentials(userName, email, password);
+            
+            if (!result.success) {
+                // Display the specific error message from the backend
+                setError(result.error || "Failed to sign up. Please try again.");
+                setLoading(false);
+                return;
+            }
+            
+            // Add a timestamp to prevent caching
+            const timestamp = Date.now();
+            
+            if (result.message) {
+                setSuccess(result.message);
+                // Show success message for 2 seconds, then redirect
+                setTimeout(() => {
+                    window.location.href = `/login?ts=${timestamp}`;
+                }, 2000);
+            } else {
+                // Use window.location.href instead of router.push() to force a full page reload
+                window.location.href = `/dashboard/home?ts=${timestamp}`;
+            }
+        } catch (err: any) {
+            // Handle any unexpected errors that weren't caught by signUpWithCredentials
+            console.error("Unexpected error during signup:", err);
+            setError("An unexpected error occurred. Please try again later.");
+        } finally {
             setLoading(false);
-            return;
         }
-        
-        // Add a timestamp to prevent caching
-        const timestamp = Date.now();
-        
-        if (result.message) {
-            setSuccess(result.message);
-            setTimeout(() => {
-                window.location.href = `/login?ts=${timestamp}`;
-            }, 2000);
-        } else {
-            // Use window.location.href instead of router.push() to force a full page reload
-            window.location.href = `/dashboard/home?ts=${timestamp}`;
-        }
-        
-        setLoading(false);
     };
 
     return (
@@ -103,17 +111,19 @@ const SignupForm = () => {
                     Create shareable clips in minutes. Free forever. No credit card required.
                 </p>
 
-                {/* Error message */}
+                {/* Error message with more details */}
                 {error && (
-                    <div className="mt-4 p-2 bg-red-100 text-red-600 rounded-lg text-center">
-                        {error}
+                    <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-lg">
+                        <p className="font-semibold">Error:</p>
+                        <p>{error}</p>
                     </div>
                 )}
 
                 {/* Success message */}
                 {success && (
-                    <div className="mt-4 p-2 bg-green-100 text-green-600 rounded-lg text-center">
-                        {success}
+                    <div className="mt-4 p-3 bg-green-100 text-green-700 rounded-lg">
+                        <p className="font-semibold">Success:</p>
+                        <p>{success}</p>
                     </div>
                 )}
 

@@ -129,15 +129,34 @@ export const signUpWithCredentials = async (name: string, email: string, passwor
         const hashedPassword = await bcrypt.hash(password, 10)
         
         // Create user
-        await prisma.user.create({
-            data: {
-                name,
-                email,
-                password: hashedPassword,
-                createdAt: new Date(),
-                updatedAt: new Date()
+        try {
+            await prisma.user.create({
+                data: {
+                    name,
+                    email,
+                    password: hashedPassword,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }
+            })
+        } catch (createError: any) {
+            // Handle specific database errors for user creation
+            console.error("Database error during user creation:", createError);
+            
+            if (createError.code === 'P2002') {
+                return { success: false, error: "Email already exists in our system" };
             }
-        })
+            
+            if (createError.code === 'P2000') {
+                return { success: false, error: "One of the provided values is too long" };
+            }
+            
+            return { 
+                success: false, 
+                error: "Failed to create account due to database error",
+                details: process.env.NODE_ENV === 'development' ? createError.message : undefined 
+            };
+        }
         
         // Sign in the user without redirect
         try {
@@ -147,12 +166,17 @@ export const signUpWithCredentials = async (name: string, email: string, passwor
                 redirect: false
             })
             return { success: true }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error during auto-login after signup:", error)
+            // Return success with a message since account was created but auto-login failed
             return { success: true, message: "Account created! Please log in." }
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error during signup:", error)
-        return { success: false, error: "Failed to create account" }
+        return { 
+            success: false, 
+            error: "Failed to create account: " + (error.message || "Unknown error"),
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined 
+        }
     }
 }

@@ -136,11 +136,13 @@ const createProdSafePrismaClient = () => {
 export const prisma = global.prisma || (() => {
   // Check if we're in a Node.js environment
   if (typeof window === 'undefined') {
+    /* Remove build phase detection that's causing issues
     // During build time, we may not want to initialize Prisma fully
     if (process.env.NEXT_PHASE === 'phase-production-build') {
       console.log('Build phase detected, using Prisma mock');
       return createPrismaMock();
     }
+    */
     
     // In production and development on server side, use actual Prisma client
     try {
