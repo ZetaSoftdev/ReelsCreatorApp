@@ -17,14 +17,12 @@ const nextConfig = {
     domains: ['localhost', 'reels-creator-alb-555953912.us-west-1.elb.amazonaws.com'],
   },
   // Add rewrites to proxy API requests to avoid mixed content issues
-  async rewrites() {
-    return [
-      {
-        source: '/api/proxy/:path*',
-        destination: process.env.NEXT_PUBLIC_API_ENDPOINT.replace('/api/v1', '') + '/:path*', // Proxy to API server
-      },
-    ]
-  },
+  rewrites: async () => [
+    {
+      source: '/api/proxy/:path*',
+      destination: 'http://reels-creator-alb-555953912.us-west-1.elb.amazonaws.com/api/v1/:path*',
+    },
+  ],
   // Add webpack configuration to properly transpile bcryptjs
   webpack: (config, { isServer }) => {
     if (!isServer) {
