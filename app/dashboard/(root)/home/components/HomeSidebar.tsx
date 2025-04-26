@@ -128,7 +128,7 @@ export default function HomeSidebar() {
     error?: string | null;
   }>({ file: null, url: "", status: null, error: null });
   const router = useRouter();
-  
+
   // Add user state to store session data
   const [user, setUser] = useState<{
     id: string;
@@ -217,15 +217,15 @@ export default function HomeSidebar() {
     
     if (savedClips) {
       try {
-        setClipsList(JSON.parse(savedClips));
+      setClipsList(JSON.parse(savedClips));
       } catch (e) {
         console.error("Error parsing saved clips:", e);
-      }
+    }
     }
     
     if (savedSubtitles) {
       try {
-        setSubtitlesList(JSON.parse(savedSubtitles));
+      setSubtitlesList(JSON.parse(savedSubtitles));
       } catch (e) {
         console.error("Error parsing saved subtitles:", e);
       }
@@ -241,17 +241,17 @@ export default function HomeSidebar() {
     
     if (savedVideo) {
       try {
-        const videoData = JSON.parse(savedVideo);
+      const videoData = JSON.parse(savedVideo);
         if (videoData.url) {
-          setUploadedVideo({
+      setUploadedVideo({
             file: null, // We can't restore the actual file object from localStorage
-            url: videoData.url,
-            status: videoData.status,
-            name: videoData.name,
+        url: videoData.url,
+        status: videoData.status,
+        name: videoData.name,
             size: videoData.size,
             progress: videoData.progress,
             error: null
-          });
+      });
         }
       } catch (e) {
         console.error("Error parsing saved video:", e);
@@ -529,7 +529,7 @@ export default function HomeSidebar() {
       
       const data = await response.json();
       console.log("API Response:", data);
-      
+
       // Check if the response contains an error
       if (data.error || data.detail) {
         const errorMessage = data.error || data.detail || "Unknown error";
@@ -693,23 +693,23 @@ export default function HomeSidebar() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mx-auto gap-1 -mt-10 px-0 sm:px-7">
             {createBtns.map((btn, index) => (
               <div key={index} className="relative text-center overflow-hidden" >
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
+              <motion.button
+                whileHover={{ scale: 1.05 }}
                   onClick={btn.onClickHandler}
-                  className="relative px-10 py-1 bg-bgWhite rounded-lg shadow-lg shadow-gray-700/10 border text-center cursor-pointer overflow-hidden h-36 w-64"
+                className="relative px-10 py-1 bg-bgWhite rounded-lg shadow-lg shadow-gray-700/10 border text-center cursor-pointer overflow-hidden h-36 w-64"
+              >
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  whileHover={{ opacity: 1 }}
+                  className="absolute top-0 left-0 right-0 bottom-0 bg-yellow bg-opacity-85 flex items-center justify-center text-gray-900 font-semibold text-lg"
                 >
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    whileHover={{ opacity: 1 }}
-                    className="absolute top-0 left-0 right-0 bottom-0 bg-yellow bg-opacity-85 flex items-center justify-center text-gray-900 font-semibold text-lg"
-                  >
-                    Start
-                  </motion.p>
-                  {btn.image}
-                </motion.button>
+                  Start
+                </motion.p>
+              {btn.image}
+              </motion.button>
 
-                <p className="mt-4">{btn.label}</p>
-              </div>
+              <p className="mt-4">{btn.label}</p>
+            </div>
             ))}
           </div>
         </div>
@@ -812,57 +812,57 @@ export default function HomeSidebar() {
                   currentClips.map((clipFilename, index) => {
                     const videoUrl = getVideoUrl(clipFilename);
                     const wordTimestampsUrl = getWordTimestampsUrl(clipFilename.replace('final_', ''));
-                    const actualIndex = indexOfFirstClip + index;
-                    
-                    return (
-                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                        <div className="relative aspect-[9/16] bg-black">
-                          <video 
-                            className="w-full h-full object-cover"
-                            controls
-                            src={videoUrl}
-                            onError={(e) => {
-                              console.error("Video loading error for:", clipFilename, e);
-                            }}
-                          />
-                        </div>
-                        <div className="p-2">
-                          <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
-                          <div className="flex justify-between items-center mt-2">
-                            <a 
-                              href={videoUrl}
-                              download={clipFilename}
-                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Download size={14} />
-                              <span>Download</span>
-                            </a>
-                            <button 
-                              onClick={() => {
-                                // Get the video filename without the "final_" prefix
-                                const originalVideoName = clipFilename.replace('final_', '');
-                                
-                                // Construct the URLs
+                  const actualIndex = indexOfFirstClip + index;
+                  
+                  return (
+                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <div className="relative aspect-[9/16] bg-black">
+                        <video 
+                          className="w-full h-full object-cover"
+                          controls
+                          src={videoUrl}
+                          onError={(e) => {
+                            console.error("Video loading error for:", clipFilename, e);
+                          }}
+                        />
+                      </div>
+                      <div className="p-2">
+                        <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
+                        <div className="flex justify-between items-center mt-2">
+                          <a 
+                            href={videoUrl}
+                            download={clipFilename}
+                            className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <Download size={14} />
+                            <span>Download</span>
+                          </a>
+                          <button 
+                            onClick={() => {
+                              // Get the video filename without the "final_" prefix
+                              const originalVideoName = clipFilename.replace('final_', '');
+                              
+                              // Construct the URLs
                                 const videoUrl = getVideoUrl(clipFilename);
                                 const wordTimestampsUrl = getWordTimestampsUrl(originalVideoName);
-                                
+                              
                                 // Navigate to edit page with both video and word timestamps parameters
-                                const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
+                              const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
                                 const finalUrl = `${editUrl}&wordTimestampsUrl=${encodeURIComponent(wordTimestampsUrl)}`;
-                                
-                                router.push(finalUrl);
-                              }}
-                              className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                            >
-                              <Edit2 size={14} />
-                              <span>Edit</span>
-                            </button>
-                          </div>
+                              
+                              router.push(finalUrl);
+                            }}
+                            className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                          >
+                            <Edit2 size={14} />
+                            <span>Edit</span>
+                          </button>
                         </div>
                       </div>
-                    );
+                    </div>
+                  );
                   })
                 }
               </div>
@@ -938,7 +938,7 @@ export default function HomeSidebar() {
                       </p>
                       
                       {/* Upload status and progress indicator */}
-                      {uploadedVideo.status === "processing" && (
+                        {uploadedVideo.status === "processing" && (
                         <div className="mt-4">
                           <div className="flex flex-col space-y-2">
                             <div className="flex justify-between items-center">
@@ -962,16 +962,16 @@ export default function HomeSidebar() {
                         </div>
                       )}
                       
-                      {uploadedVideo.status === "completed" && (
+                        {uploadedVideo.status === "completed" && (
                         <span className="text-green-500 inline-flex items-center mt-2">
                           <span className="mr-1">✓</span>
                           Processing completed
                         </span>
-                      )}
+                        )}
                       
-                      {uploadedVideo.status === "failed" && (
+                        {uploadedVideo.status === "failed" && (
                         <ErrorDisplay error={uploadedVideo.error} />
-                      )}
+                        )}
                     </div>
                   </div>
                 </div>
@@ -1063,13 +1063,13 @@ export default function HomeSidebar() {
                 <div className="mt-6">
                   <label className="text-gray-700 font-medium block mb-2">Paste YouTube Link</label>
                   <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="https://www.youtube.com/watch?v=..."
+                  <input
+                    type="text"
+                    placeholder="https://www.youtube.com/watch?v=..."
                       className="w-full border border-gray-300 p-3 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                      value={youtubeLink}
-                      onChange={(e) => setYoutubeLink(e.target.value)}
-                    />
+                    value={youtubeLink}
+                    onChange={(e) => setYoutubeLink(e.target.value)}
+                  />
                   </div>
                   <button
                     onClick={handleImportYoutube}

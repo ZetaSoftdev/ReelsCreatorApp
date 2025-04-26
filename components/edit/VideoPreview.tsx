@@ -80,7 +80,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
   }, [wordTimestampsUrl]);
 
   return (
-    <div className="video-preview w-full relative">
+    <div className="video-preview w-full h-full relative">
       {isLoading && <div className="flex justify-center items-center h-full">Loading video...</div>}
       {error && <div className="text-red-500 p-4">{error}</div>}
       
@@ -100,7 +100,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
               videoRef={actualVideoRef as React.RefObject<HTMLVideoElement>}
               wordTimestamps={wordTimestamps}
               preset={selectedPreset}
-              wordsPerLine={4}
+              wordsPerLine={selectedPreset.wordsPerLine || 4}
             />
           )}
         </div>

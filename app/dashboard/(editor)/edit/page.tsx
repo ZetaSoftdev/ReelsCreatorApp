@@ -46,7 +46,9 @@ function VideoEditorContent() {
   const [isYoutube, setIsYoutube] = useState(false);
   const [selectedTool, setSelectedTool] = useState("caption");
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
-  const [selectedPreset, setSelectedPreset] = useState<CaptionPreset | null>(null);
+  const [selectedPreset, setSelectedPreset] = useState<CaptionPreset | null>(
+    PRESET_OPTIONS.find(p => p.id === 'minimal') || null
+  );
   const videoRef = useRef<HTMLVideoElement>(null) as RefObject<HTMLVideoElement>;
 
   useEffect(() => {
@@ -58,52 +60,8 @@ function VideoEditorContent() {
 
   console.log("word timestamps in edit page: ", wordTimestampsUrl);
   
-  // Load and parse the word timestamps JSON file
-  useEffect(() => {
-    const loadWordTimestamps = async () => {
-      if (!wordTimestampsUrl) {
-        console.log("No wordTimestampsUrl provided");
-        return;
-      }
-      
-      try {
-        const decodedUrl = decodeURIComponent(wordTimestampsUrl);
-        console.log("Attempting to fetch word timestamps from:", decodedUrl);
-        
-        const response = await fetch(decodedUrl);
-        console.log("Word timestamps response status:", response.status);
-        
-        const jsonData = await response.json();
-        console.log("Received word timestamps data:", jsonData);
-        
-        // Parse word timestamps to the subtitle format
-        const parsedSubtitles = parseWordTimestamps(jsonData);
-        console.log("Parsed subtitles from word timestamps:", parsedSubtitles);
-        setSubtitles(parsedSubtitles);
-      } catch (error) {
-        console.error("Error loading word timestamps:", error);
-      }
-    };
-    
-    loadWordTimestamps();
-  }, [wordTimestampsUrl]);
-
-  // Handle preset selection from EditSection
-  const handlePresetChange = (preset: CaptionPreset) => {
-    setSelectedPreset(preset);
-  };
-
-  // Format seconds to MM:SS:MS display format (including milliseconds)
-  const formatDisplayTime = (timeInSeconds: number): string => {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    const milliseconds = Math.floor((timeInSeconds % 1) * 1000);
-    
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
-  };
-
   // Parse word timestamps JSON into the subtitle format needed by the UI
-  const parseWordTimestamps = (data: any): Subtitle[] => {
+  const parseWordTimestamps = (data: any, preset?: CaptionPreset | null): Subtitle[] => {
     try {
       if (!data.segments || !Array.isArray(data.segments)) {
         console.error("Invalid word timestamps format: missing segments array");
@@ -111,16 +69,17 @@ function VideoEditorContent() {
       }
 
       const subtitles: Subtitle[] = [];
+      const wordsPerLine = preset?.wordsPerLine || 4; // Use preset setting or default to 4
       
       // Process each segment
       data.segments.forEach((segment: any) => {
-        // Group words into chunks of approximately 4 words each
+        // Only process if the segment has words array
         if (segment.words && Array.isArray(segment.words)) {
           const words = segment.words;
-          const wordsPerLine = 4; // Display 4 words per line
           
+          // Group words into chunks based on wordsPerLine setting
           for (let i = 0; i < words.length; i += wordsPerLine) {
-            const wordChunk = words.slice(i, i + wordsPerLine);
+            const wordChunk = words.slice(i, Math.min(i + wordsPerLine, words.length));
             if (wordChunk.length === 0) continue;
             
             // Get start time from first word and end time from last word
@@ -147,11 +106,78 @@ function VideoEditorContent() {
         }
       });
       
+      // Sort subtitles by start time
+      subtitles.sort((a, b) => a.startTime - b.startTime);
+      
       return subtitles;
     } catch (error) {
       console.error("Error parsing word timestamps:", error);
       return [];
     }
+  };
+
+  // Load and parse the word timestamps JSON file
+  useEffect(() => {
+    const loadWordTimestamps = async () => {
+      if (!wordTimestampsUrl) {
+        console.log("No wordTimestampsUrl provided");
+        return;
+      }
+      
+      try {
+        const decodedUrl = decodeURIComponent(wordTimestampsUrl);
+        console.log("Attempting to fetch word timestamps from:", decodedUrl);
+        
+        const response = await fetch(decodedUrl);
+        console.log("Word timestamps response status:", response.status);
+        
+        const jsonData = await response.json();
+        console.log("Received word timestamps data:", jsonData);
+        
+        // Parse word timestamps to the subtitle format using the selected preset
+        const parsedSubtitles = parseWordTimestamps(jsonData, selectedPreset);
+        console.log("Parsed subtitles from word timestamps:", parsedSubtitles);
+        setSubtitles(parsedSubtitles);
+      } catch (error) {
+        console.error("Error loading word timestamps:", error);
+      }
+    };
+    
+    loadWordTimestamps();
+  }, [wordTimestampsUrl, selectedPreset]);
+
+  // Handle preset selection from EditSection
+  const handlePresetChange = (preset: CaptionPreset) => {
+    console.log("Preset changed:", preset);
+    setSelectedPreset(preset);
+    
+    // If we have word timestamps data, reparse it with the new preset
+    if (wordTimestampsUrl) {
+      const loadWordTimestamps = async () => {
+        try {
+          const decodedUrl = decodeURIComponent(wordTimestampsUrl);
+          const response = await fetch(decodedUrl);
+          const jsonData = await response.json();
+          
+          // Reparse with the new preset's wordsPerLine setting
+          const parsedSubtitles = parseWordTimestamps(jsonData, preset);
+          setSubtitles(parsedSubtitles);
+        } catch (error) {
+          console.error("Error reloading word timestamps after preset change:", error);
+        }
+      };
+      
+      loadWordTimestamps();
+    }
+  };
+
+  // Format seconds to MM:SS:MS display format (including milliseconds)
+  const formatDisplayTime = (timeInSeconds: number): string => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = Math.floor(timeInSeconds % 60);
+    const milliseconds = Math.floor((timeInSeconds % 1) * 1000);
+    
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
   };
 
   const handleCutVideo = (start: number, end: number) => {
@@ -165,6 +191,9 @@ function VideoEditorContent() {
         selectedTool={selectedTool} 
         setSelectedTool={setSelectedTool}
         videoTitle={videoName || "Untitled Video"}
+        videoSrc={videoSrc}
+        wordTimestampsUrl={wordTimestampsUrl ? decodeURIComponent(wordTimestampsUrl) : undefined}
+        selectedPreset={selectedPreset}
       />
 
       <div className="flex h-[calc(100vh-4rem)]">

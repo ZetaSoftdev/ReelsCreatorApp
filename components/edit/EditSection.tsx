@@ -11,6 +11,41 @@ import { Input } from '@/components/ui/input';
 import { Check, Edit2, Save } from 'lucide-react';
 import { Switch } from "@/components/ui/switch";
 import { ColorPicker } from "../ui/color-picker";
+import { generateASS } from '@/utils/subtitleUtils';
+
+// Font options
+const FONT_FAMILIES = [
+  'Poppins, sans-serif',
+  'Roboto, sans-serif',
+  'Montserrat, sans-serif',
+  'Ubuntu, sans-serif',
+  'Pacifico, cursive',
+  'Permanent Marker, cursive',
+  'Cinzel, serif',
+  'Nerko One, cursive',
+  'New Amsterdam, cursive',
+  'Sniglet, cursive',
+  'Jersey10, cursive'
+];
+
+// Font weight options
+const FONT_WEIGHTS = [
+  'normal',
+  'bold'
+];
+
+// Position options
+const POSITION_OPTIONS = [
+  { id: 'center', label: 'Center' }
+];
+
+// Animation options
+const ANIMATION_OPTIONS = [
+  { id: 'none', label: 'None' },
+  { id: 'highlight', label: 'Highlight' },
+  { id: 'fade', label: 'Fade' },
+  { id: 'slide', label: 'Slide' }
+];
 
 // Define the CaptionPreset interface
 export interface CaptionPreset {
@@ -24,7 +59,8 @@ export interface CaptionPreset {
   bgOpacity: number;
   textShadow: boolean;
   animation: string;
-  position: 'top' | 'center' | 'bottom';
+  position: 'center';
+  marginY: number;
   // Additional properties for CaptionRenderer
   alignment?: 'left' | 'center' | 'right';
   shadowColor?: string;
@@ -38,6 +74,7 @@ export interface CaptionPreset {
   textOutline?: boolean;
   outlineColor?: string;
   outlineWidth?: number;
+  wordsPerLine?: number;
 }
 
 // Predefined caption presets
@@ -45,33 +82,39 @@ export const PRESET_OPTIONS: CaptionPreset[] = [
   {
     id: 'minimal',
     name: 'Minimal',
-    fontFamily: 'Arial, sans-serif',
+    fontFamily: 'Poppins, sans-serif',
     fontSize: 24,
     fontWeight: 'normal',
     color: '#FFFFFF',
     bgColor: 'transparent',
     bgOpacity: 0,
     textShadow: true,
-    animation: 'none',
-    position: 'bottom'
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFF00'
   },
   {
     id: 'bold',
     name: 'Bold',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 28,
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
     bgColor: '#000000',
     bgOpacity: 0.5,
     textShadow: false,
-    animation: 'none',
-    position: 'bottom'
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFF00'
   },
   {
     id: 'tiktok',
     name: 'TikTok Style',
-    fontFamily: 'Arial, sans-serif',
+    fontFamily: 'Roboto, sans-serif',
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
@@ -79,77 +122,59 @@ export const PRESET_OPTIONS: CaptionPreset[] = [
     bgOpacity: 0.7,
     textShadow: false,
     animation: 'highlight',
-    position: 'center'
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#00FFFF'
   },
   {
     id: 'subtitles',
     name: 'Subtitles',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 20,
+    fontFamily: 'Roboto, sans-serif',
+    fontSize: 24,
     fontWeight: 'normal',
     color: '#FFFFFF',
     bgColor: '#000000',
     bgOpacity: 0.6,
     textShadow: false,
-    animation: 'none',
-    position: 'bottom'
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFF00'
   },
   {
     id: 'colorful',
     name: 'Colorful',
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 26,
+    fontFamily: 'Pacifico, cursive',
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FF9500',
     bgColor: '#5856D6',
     bgOpacity: 0.7,
     textShadow: true,
     animation: 'highlight',
-    position: 'bottom'
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFFFF'
   },
   {
     id: 'outline',
     name: 'Outline',
-    fontFamily: 'Arial, sans-serif',
+    fontFamily: 'Montserrat, sans-serif',
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
     bgColor: 'transparent',
     bgOpacity: 0,
     textShadow: true,
-    animation: 'none',
-    position: 'bottom'
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#00FFFF'
   }
-];
-
-// Font options
-const FONT_FAMILIES = [
-  'Arial, sans-serif',
-  'Georgia, serif',
-  'Verdana, sans-serif',
-  'Courier New, monospace',
-  'Impact, fantasy'
-];
-
-// Font weight options
-const FONT_WEIGHTS = [
-  'normal',
-  'bold'
-];
-
-// Position options
-const POSITION_OPTIONS = [
-  { id: 'top', label: 'Top' },
-  { id: 'center', label: 'Center' },
-  { id: 'bottom', label: 'Bottom' }
-];
-
-// Animation options
-const ANIMATION_OPTIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'highlight', label: 'Highlight' },
-  { id: 'fade', label: 'Fade' },
-  { id: 'slide', label: 'Slide' }
 ];
 
 interface EditSectionProps {
@@ -498,6 +523,16 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
               />
             </div>
             
+            {/* Highlight Color */}
+            <div className="space-y-2">
+              <Label>Highlight Color</Label>
+              <ColorPicker
+                value={customPreset.highlightColor || '#FFFF00'}
+                onChange={(value) => handleCustomPresetChange('highlightColor', value)}
+                disabled={!editMode}
+              />
+            </div>
+            
             {/* Background Color */}
             <div className="space-y-2">
               <Label>Background Color</Label>
@@ -535,29 +570,28 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
               />
             </div>
             
-            {/* Position */}
+            {/* Vertical Position */}
             <div className="space-y-2">
-              <Label>Position</Label>
-              <RadioGroup 
-                value={customPreset.position} 
-                onValueChange={(value: 'top' | 'center' | 'bottom') => 
-                  handleCustomPresetChange('position', value)
-                }
+              <div className="flex justify-between">
+                <Label>Vertical Position</Label>
+                <span className="text-sm text-gray-500">
+                  {customPreset.marginY > 0 ? `Bottom +${customPreset.marginY}` : 
+                   customPreset.marginY < 0 ? `Top ${customPreset.marginY}` : 'Center'}
+                </span>
+              </div>
+              <Slider
+                min={-100}
+                max={100}
+                step={10}
+                value={[customPreset.marginY]}
+                onValueChange={(value) => handleCustomPresetChange('marginY', value[0])}
                 disabled={!editMode}
-                className="flex gap-4"
-              >
-                {POSITION_OPTIONS.map((position) => (
-                  <div key={position.id} className="flex items-center space-x-2">
-                    <RadioGroupItem 
-                      value={position.id} 
-                      id={`position-${position.id}`} 
-                    />
-                    <Label htmlFor={`position-${position.id}`}>
-                      {position.label}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              />
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Top</span>
+                <span>Center</span>
+                <span>Bottom</span>
+              </div>
             </div>
             
             {/* Animation */}
@@ -577,6 +611,33 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
                     />
                     <Label htmlFor={`animation-${animation.id}`}>
                       {animation.label}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+            
+            {/* Words Per Line */}
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <Label>Words Per Line</Label>
+                <span className="text-sm text-gray-500">{customPreset.wordsPerLine || 4}</span>
+              </div>
+              <RadioGroup 
+                value={(customPreset.wordsPerLine || 4).toString()} 
+                onValueChange={(value) => handleCustomPresetChange('wordsPerLine', parseInt(value))}
+                disabled={!editMode}
+                className="grid grid-cols-4 gap-2"
+              >
+                {[1, 2, 3, 4].map((count) => (
+                  <div key={count} className="flex items-center justify-center">
+                    <RadioGroupItem 
+                      value={count.toString()} 
+                      id={`words-per-line-${count}`} 
+                      className="mr-1"
+                    />
+                    <Label htmlFor={`words-per-line-${count}`}>
+                      {count}
                     </Label>
                   </div>
                 ))}
