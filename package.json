@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
-    "postbuild": "apt-get update && apt-get install -y ffmpeg || echo 'Failed to install FFmpeg, continuing anyway'",
     "postdeploy": "prisma migrate deploy",
     "start": "next start",
     "lint": "next lint"
