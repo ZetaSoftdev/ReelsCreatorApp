@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
         }
       ],
       mode: 'subscription',
-      success_url: `${req.nextUrl.origin}/dashboard/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.nextUrl.origin}/dashboard/pricing`,
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/dashboard/subscription/success?session_id={CHECKOUT_SESSION_ID}`,      
+      cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/dashboard/pricing`,
       metadata: {
         userId: session.user.id,
         userName: session.user.name || '',
