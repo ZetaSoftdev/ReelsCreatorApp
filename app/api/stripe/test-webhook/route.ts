@@ -5,11 +5,6 @@ import { updateSubscriptionRecordsDirect } from '@/lib/stripe-helpers/subscripti
 // Force this route to be treated as a server-side route, not Edge
 export const runtime = 'nodejs';
 
-// Add GET handler for build-time
-export async function GET() {
-  return NextResponse.json({ message: 'Stripe test webhook endpoint is available.' });
-}
-
 export async function POST(req: Request) {
   let body: string;
   try {

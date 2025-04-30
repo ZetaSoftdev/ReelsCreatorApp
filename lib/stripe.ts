@@ -5,19 +5,8 @@ import { prisma } from '@/lib/prisma';
 const prismaAny = prisma as any;
 
 // Initialize with empty values, will be replaced with actual settings
-// Using fallback value ensures we always have a non-empty string
-let stripeSecretKey = process.env.STRIPE_SECRET_KEY || 'sk_test_fallback_for_build_only';
-let stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || 'whsec_fallback_for_build_only';
-
-// Log warning in development but not during build
-if (process.env.NODE_ENV !== 'production') {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.warn('⚠️ STRIPE_SECRET_KEY not set in environment variables!');
-  }
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    console.warn('⚠️ STRIPE_WEBHOOK_SECRET not set in environment variables!');
-  }
-}
+let stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
+let stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 // Create Stripe instance with default or environment values
 export const stripe = new Stripe(stripeSecretKey, {

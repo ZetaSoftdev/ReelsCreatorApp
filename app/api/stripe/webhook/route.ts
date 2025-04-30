@@ -13,27 +13,8 @@ export const runtime = 'nodejs';
 // Initialize Stripe with the client we already created
 const stripe = stripeClient;
 
-// Handle build time prerender - During build, we'll return a simplified response
-export async function GET() {
-  return NextResponse.json({ message: 'Stripe webhook endpoint is available.' });
-}
-
 export async function POST(req: Request) {
   console.log('==== STRIPE WEBHOOK HANDLER STARTED ====');
-  
-  // Check if we're in build environment without proper Stripe config
-  if (process.env.NODE_ENV === 'production' && (!webhookSecret || webhookSecret === 'whsec_fallback_for_build_only')) {
-    console.log('Build environment detected without proper Stripe webhook secret');
-    return NextResponse.json(
-      { 
-        message: 'Stripe webhook endpoint is available but not configured during build.',
-        environment: process.env.NODE_ENV,
-        error: 'Missing proper Stripe webhook configuration',
-      }, 
-      { status: 200 }
-    );
-  }
-  
   try {
     // Initialize Stripe with latest settings from database
     await initializeStripe();

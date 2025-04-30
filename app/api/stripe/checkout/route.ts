@@ -6,11 +6,6 @@ import { stripe, initializeStripe } from '@/lib/stripe';
 // Force this route to be treated as a server-side route, not Edge
 export const runtime = 'nodejs';
 
-// Add GET handler for build-time
-export async function GET() {
-  return NextResponse.json({ message: 'Stripe checkout endpoint is available.' });
-}
-
 export async function POST(req: NextRequest) {
   try {
     // Get the authenticated user
@@ -24,20 +19,6 @@ export async function POST(req: NextRequest) {
 
     console.log('==== STRIPE CHECKOUT STARTING ====');
     console.log('Authenticated user:', session.user.id);
-
-    // Check if this is the build environment with dummy keys
-    if (process.env.NODE_ENV === 'production' && 
-        (stripe as any)._api.auth.includes('fallback_for_build_only')) {
-      console.log('Build environment detected with fallback Stripe key');
-      return NextResponse.json(
-        { 
-          message: 'Stripe checkout endpoint is available but not configured during build.',
-          environment: process.env.NODE_ENV,
-          error: 'Missing proper Stripe API configuration'
-        }, 
-        { status: 200 }
-      );
-    }
 
     // Get the plan ID from the request body
     const { planId, billingCycle } = await req.json();
