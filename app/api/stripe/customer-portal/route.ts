@@ -1,21 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import Stripe from "stripe";
+import { stripe, initializeStripe } from "@/lib/stripe";
 
-// Make sure we have the right Stripe key
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY || "";
-if (!stripeSecretKey) {
-  console.error("STRIPE_SECRET_KEY environment variable is not set");
+// Force this route to be treated as a server-side route, not Edge
+export const runtime = 'nodejs';
+
+// Add GET handler for build-time
+export async function GET() {
+  return NextResponse.json({ message: 'Stripe customer portal endpoint is available.' });
 }
-
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2023-10-16" as any,
-});
 
 export async function POST(req: NextRequest) {
   try {
     console.log("=== CUSTOMER PORTAL REQUEST STARTED ===");
+    
+    // Initialize Stripe with latest settings from database
+    await initializeStripe();
+    
+    // Check if this is the build environment with dummy keys
+    if (process.env.NODE_ENV === 'production' && 
+        (stripe as any)._api.auth.includes('fallback_for_build_only')) {
+      console.log('Build environment detected with fallback Stripe key');
+      return NextResponse.json(
+        { 
+          message: 'Stripe customer portal endpoint is available but not configured during build.',
+          environment: process.env.NODE_ENV,
+          error: 'Missing proper Stripe API configuration'
+        }, 
+        { status: 200 }
+      );
+    }
     
     // Get the authenticated user
     const session = await auth();
