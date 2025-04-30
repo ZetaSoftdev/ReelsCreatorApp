@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, Save, Check, AlertCircle } from "lucide-react";
+import { Upload, Save, Check, AlertCircle, Loader2, EyeIcon, EyeOffIcon } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import BrandingTest from "@/components/branding-test";
+import { toast } from "@/hooks/use-toast";
 
 // Define a type for branding settings
 type BrandingSettings = {
@@ -48,6 +49,12 @@ type Settings = {
     enableRecurring: boolean;
     gracePeriod: string;
     allowCancellation: boolean;
+  };
+  stripe: {
+    publishableKey: string;
+    secretKey: string;
+    webhookSecret: string;
+    enableLiveMode: boolean;
   };
   privacy: {
     privacyPolicy: string;
@@ -104,6 +111,12 @@ export default function SettingsPage() {
       gracePeriod: "3",
       allowCancellation: true
     },
+    stripe: {
+      publishableKey: "",
+      secretKey: "",
+      webhookSecret: "",
+      enableLiveMode: false
+    },
     privacy: {
       privacyPolicy: "Your privacy policy text here...",
       termsOfService: "Your terms of service text here...",
@@ -122,6 +135,10 @@ export default function SettingsPage() {
   });
   
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [testingStripeConnection, setTestingStripeConnection] = useState(false);
   
   // Fetch branding settings from API on component mount
   useEffect(() => {
@@ -166,6 +183,9 @@ export default function SettingsPage() {
     setSaveStatus("saving");
     
     try {
+      // First save all general settings (including Stripe credentials)
+      await handleSaveSettings();
+      
       console.log('Saving branding settings...');
       
       // Create FormData to handle file uploads
@@ -226,8 +246,12 @@ export default function SettingsPage() {
       // Set success status
       setSaveStatus("success");
       
-      // Show success message
-      alert("Branding settings updated successfully. The page will now reload to apply changes.");
+      // Show success message using toast instead of alert
+      toast({
+        title: "Settings Updated",
+        description: "Settings updated successfully. The page will now reload to apply changes.",
+        variant: "default"
+      });
       
       // Clear any cached branding data
       try {
@@ -244,7 +268,7 @@ export default function SettingsPage() {
         // Wait a moment for the backend to settle
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Hard reload the page to see the new branding
+        // Hard reload the page to see the new settings
         window.location.href = window.location.href.split('?')[0] + '?cache=' + cacheBuster;
       } catch (refreshError) {
         console.error('Error refreshing branding cache:', refreshError);
@@ -257,10 +281,14 @@ export default function SettingsPage() {
         setSaveStatus("idle");
       }, 3000);
     } catch (error) {
-      console.error("Error saving branding settings:", error);
+      console.error("Error saving settings:", error);
       
-      // Show error message
-      alert(`Failed to update branding settings: ${(error as Error).message}`);
+      // Show error message using toast instead of alert
+      toast({
+        title: "Error",
+        description: `Failed to update settings: ${(error as Error).message}`,
+        variant: "destructive"
+      });
       
       setSaveStatus("error");
       
@@ -358,30 +386,228 @@ export default function SettingsPage() {
     return '';
   };
 
+  // Add validation function
+  const validateStripeKeys = () => {
+    const publishableKeyPattern = /^pk_(test|live)_/;
+    const secretKeyPattern = /^sk_(test|live)_/;
+    const webhookSecretPattern = /^whsec_/;
+    
+    const errors = [];
+    
+    if (settings.stripe.publishableKey && !publishableKeyPattern.test(settings.stripe.publishableKey)) {
+      errors.push("Publishable key must start with pk_test_ or pk_live_");
+    }
+    
+    if (settings.stripe.secretKey && !secretKeyPattern.test(settings.stripe.secretKey)) {
+      errors.push("Secret key must start with sk_test_ or sk_live_");
+    }
+    
+    if (settings.stripe.webhookSecret && !webhookSecretPattern.test(settings.stripe.webhookSecret)) {
+      errors.push("Webhook secret must start with whsec_");
+    }
+    
+    return errors;
+  };
+  
+  // Update handleSaveSettings to use validation
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    
+    // Validate Stripe keys before saving
+    const stripeErrors = validateStripeKeys();
+    if (stripeErrors.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: stripeErrors.join("\n"),
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+    
+    try {
+      console.log('Saving all settings...');
+      console.log('Stripe credentials being sent:', {
+        publishableKey: settings.stripe.publishableKey,
+        secretKey: settings.stripe.secretKey ? '[PRESENT]' : '[EMPTY]',
+        webhookSecret: settings.stripe.webhookSecret ? '[PRESENT]' : '[EMPTY]',
+        enableLiveMode: settings.stripe.enableLiveMode
+      });
+      
+      const response = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save settings');
+      }
+      
+      toast({
+        title: "Settings saved",
+        description: "Your settings have been saved successfully.",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Add function to fetch all settings
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/admin/settings');
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch settings');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.settings) {
+          // Transform API response to match our state structure
+          const apiSettings = data.settings;
+          setSettings({
+            branding: {
+              siteName: apiSettings.branding?.siteName || "Editur",
+              logo: apiSettings.branding?.logoUrl || null,
+              favicon: apiSettings.branding?.faviconUrl || null,
+              primaryColor: apiSettings.branding?.primaryColor || "#8B5CF6",
+              accentColor: apiSettings.branding?.accentColor || "#F59E0B",
+              defaultFont: apiSettings.branding?.defaultFont || "Poppins"
+            },
+            general: {
+              userRegistration: apiSettings.userRegistration ?? true,
+              maxUploadSize: apiSettings.maxUploadSize?.toString() || "500",
+              defaultVideoQuality: apiSettings.defaultVideoQuality || "720p",
+              defaultLanguage: apiSettings.defaultLanguage || "en",
+              enableEmailNotifications: apiSettings.enableEmailNotifications ?? true,
+              maintenanceMode: apiSettings.maintenanceMode ?? false
+            },
+            email: {
+              fromEmail: apiSettings.fromEmail || "noreply@reelscreator.com",
+              smtpHost: apiSettings.smtpHost || "",
+              smtpPort: apiSettings.smtpPort || "",
+              smtpUsername: apiSettings.smtpUsername || "",
+              smtpPassword: apiSettings.smtpPassword || "",
+              enableSMTP: apiSettings.enableSMTP ?? false
+            },
+            subscription: {
+              trialPeriod: apiSettings.trialPeriod?.toString() || "14",
+              defaultPlan: apiSettings.defaultPlan || "basic",
+              enableRecurring: apiSettings.enableRecurring ?? true,
+              gracePeriod: apiSettings.gracePeriod?.toString() || "3",
+              allowCancellation: apiSettings.allowCancellation ?? true
+            },
+            stripe: {
+              publishableKey: apiSettings.stripePublishableKey || "",
+              secretKey: apiSettings.stripeSecretKey || "",
+              webhookSecret: apiSettings.stripeWebhookSecret || "",
+              enableLiveMode: apiSettings.stripeLiveMode ?? false
+            },
+            privacy: {
+              privacyPolicy: apiSettings.privacyPolicy || "Your privacy policy text here...",
+              termsOfService: apiSettings.termsOfService || "Your terms of service text here...",
+              cookiePolicy: apiSettings.cookiePolicy || "Your cookie policy text here...",
+              dataRetentionDays: apiSettings.dataRetentionDays?.toString() || "90",
+              allowDataExport: apiSettings.allowDataExport ?? true
+            },
+            storage: {
+              provider: apiSettings.storageProvider || "local",
+              s3BucketName: apiSettings.s3BucketName || "",
+              s3AccessKey: apiSettings.s3AccessKey || "",
+              s3SecretKey: apiSettings.s3SecretKey || "",
+              s3Region: apiSettings.s3Region || "",
+              maxStorageGB: apiSettings.maxStorageGB?.toString() || "50"
+            }
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching settings:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load settings. Please refresh the page.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchSettings();
+  }, []); // Only run once on component mount
+
+  const testStripeConnection = async () => {
+    // First validate the keys
+    const stripeErrors = validateStripeKeys();
+    if (stripeErrors.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: stripeErrors.join("\n"),
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // If keys are valid, test the connection
+    setTestingStripeConnection(true);
+    try {
+      const response = await fetch('/api/admin/stripe/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          publishableKey: settings.stripe.publishableKey,
+          secretKey: settings.stripe.secretKey,
+          webhookSecret: settings.stripe.webhookSecret,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        toast({
+          title: "Connection Successful",
+          description: "Your Stripe API keys are valid and working correctly.",
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Connection Failed",
+          description: data.error || "Unable to connect to Stripe with the provided credentials.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Connection Error",
+        description: "An error occurred while testing the connection.",
+        variant: "destructive",
+      });
+      console.error('Error testing Stripe connection:', error);
+    } finally {
+      setTestingStripeConnection(false);
+    }
+  };
+
   return (
     <div className="container py-10">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-medium text-[#343434]">Settings</h1>
         <div className="flex items-center gap-2">
-          <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline">Reset to Defaults</Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset Settings</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Are you sure you want to reset all settings to their default values? This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleReset} className="bg-purple-600 text-white hover:bg-purple-700">
-                  Reset
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
           
           <Button 
             className="gap-2 bg-purple-600 hover:bg-purple-700" 
@@ -419,13 +645,14 @@ export default function SettingsPage() {
       </div>
       
       <Tabs defaultValue="branding" value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 border">
-          <TabsTrigger value="branding">Branding</TabsTrigger>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="email">Email</TabsTrigger>
-          <TabsTrigger value="subscription">Subscription</TabsTrigger>
-          <TabsTrigger value="privacy">Privacy</TabsTrigger>
-          <TabsTrigger value="storage">Storage</TabsTrigger>
+        <TabsList className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 border">
+          <TabsTrigger value="branding" className="px-2 py-1 text-sm">Branding</TabsTrigger>
+          <TabsTrigger value="general" className="px-2 py-1 text-sm">General</TabsTrigger>
+          <TabsTrigger value="email" className="px-2 py-1 text-sm">Email</TabsTrigger>
+          <TabsTrigger value="subscription" className="px-2 py-1 text-sm">Subscription</TabsTrigger>
+          <TabsTrigger value="stripe" className="px-2 py-1 text-sm">Stripe</TabsTrigger>
+          <TabsTrigger value="privacy" className="px-2 py-1 text-sm">Privacy</TabsTrigger>
+          <TabsTrigger value="storage" className="px-2 py-1 text-sm">Storage</TabsTrigger>
         </TabsList>
         
         {/* Branding Settings */}
@@ -594,6 +821,21 @@ export default function SettingsPage() {
                 </>
               )}
             </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={handleSaveSettings} 
+                disabled={isSaving}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </CardFooter>
           </Card>
         </TabsContent>
         
@@ -903,6 +1145,134 @@ export default function SettingsPage() {
                   })}
                 />
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Stripe Settings */}
+        <TabsContent value="stripe">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stripe Settings</CardTitle>
+              <CardDescription>
+                Configure Stripe API credentials for payment processing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="publishableKey">Publishable Key</Label>
+                <p className="text-sm text-gray-500">Your Stripe publishable key (starts with pk_)</p>
+                <Input 
+                  id="publishableKey"
+                  placeholder="pk_test_..."
+                  value={settings.stripe.publishableKey}
+                  onChange={(e) => setSettings({
+                    ...settings,
+                    stripe: { ...settings.stripe, publishableKey: e.target.value }
+                  })}
+                  className={!settings.stripe.publishableKey || /^pk_(test|live)_/.test(settings.stripe.publishableKey) 
+                    ? "" 
+                    : "border-red-500 focus-visible:ring-red-500"}
+                />
+                {settings.stripe.publishableKey && !/^pk_(test|live)_/.test(settings.stripe.publishableKey) && (
+                  <p className="text-sm text-red-500 mt-1">Must start with pk_test_ or pk_live_</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="secretKey">Secret Key</Label>
+                <p className="text-sm text-gray-500">Your Stripe secret key (starts with sk_). This is sensitive information.</p>
+                <div className="relative">
+                  <Input 
+                    id="secretKey"
+                    type={showSecretKey ? "text" : "password"}
+                    placeholder="sk_test_..."
+                    value={settings.stripe.secretKey}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      stripe: { ...settings.stripe, secretKey: e.target.value }
+                    })}
+                    className={!settings.stripe.secretKey || /^sk_(test|live)_/.test(settings.stripe.secretKey) 
+                      ? "" 
+                      : "border-red-500 focus-visible:ring-red-500"}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowSecretKey(!showSecretKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showSecretKey ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                  </button>
+                </div>
+                {settings.stripe.secretKey && !/^sk_(test|live)_/.test(settings.stripe.secretKey) && (
+                  <p className="text-sm text-red-500 mt-1">Must start with sk_test_ or sk_live_</p>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="webhookSecret">Webhook Secret</Label>
+                <p className="text-sm text-gray-500">Your Stripe webhook signing secret (starts with whsec_)</p>
+                <div className="relative">
+                  <Input 
+                    id="webhookSecret"
+                    type={showWebhookSecret ? "text" : "password"}
+                    placeholder="whsec_..."
+                    value={settings.stripe.webhookSecret}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      stripe: { ...settings.stripe, webhookSecret: e.target.value }
+                    })}
+                    className={!settings.stripe.webhookSecret || /^whsec_/.test(settings.stripe.webhookSecret) 
+                      ? "" 
+                      : "border-red-500 focus-visible:ring-red-500"}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowWebhookSecret(!showWebhookSecret)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                  >
+                    {showWebhookSecret ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                  </button>
+                </div>
+                {settings.stripe.webhookSecret && !/^whsec_/.test(settings.stripe.webhookSecret) && (
+                  <p className="text-sm text-red-500 mt-1">Must start with whsec_</p>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enableLiveMode">Enable Live Mode</Label>
+                  <p className="text-sm text-gray-500">Switch to Stripe live mode for processing real payments</p>
+                </div>
+                <Switch 
+                  id="enableLiveMode"
+                  checked={settings.stripe.enableLiveMode}
+                  onCheckedChange={(checked: boolean) => setSettings({
+                    ...settings,
+                    stripe: { ...settings.stripe, enableLiveMode: checked }
+                  })}
+                />
+              </div>
+              
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={testStripeConnection}
+                disabled={testingStripeConnection}
+                className="mt-2"
+              >
+                {testingStripeConnection ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Testing Connection...
+                  </>
+                ) : (
+                  <>
+                    <Check className="mr-2 h-4 w-4" />
+                    Test Connection
+                  </>
+                )}
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>

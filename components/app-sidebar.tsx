@@ -90,19 +90,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         isActive: pathname === "/dashboard/schedule",
       },
       {
-        title: "Automated Series",
-        url: "/dashboard/automated-series",
-        icon: MdAutoFixNormal,
-        isActive: pathname === "/dashboard/automated-series",
-      },
-      {
         title: "Services",
         url: "/dashboard/services",
         icon: GrServices,
         isActive: pathname === "/dashboard/services",
       },
       {
-        title: "Pricing",
+        title: "Subscription",
         url: "/dashboard/pricing",
         icon: DollarSign,
         isActive: pathname === "/dashboard/pricing",

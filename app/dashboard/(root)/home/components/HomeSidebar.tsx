@@ -1,16 +1,16 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
-import { 
-  ChevronDown, 
-  UploadCloud, 
-  HelpCircle, 
-  FolderPlus, 
-  Search, 
-  Import, 
-  X, 
-  LayoutDashboard, 
-  ChevronLeft, 
+import {
+  ChevronDown,
+  UploadCloud,
+  HelpCircle,
+  FolderPlus,
+  Search,
+  Import,
+  X,
+  LayoutDashboard,
+  ChevronLeft,
   ChevronRight,
   Download,
   Edit2
@@ -21,14 +21,17 @@ import { useDropzone } from "react-dropzone";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Role } from "@/lib/constants";
-import { 
-  getVideoUrl, 
-  getSubtitleUrl, 
+import { toast } from "@/hooks/use-toast";
+import {
+  getVideoUrl,
+  getSubtitleUrl,
   getWordTimestampsUrl,
   createVideoProcessingJob,
   getJobStatus,
   getJobDetails,
-  cancelJob
+  cancelJob,
+  saveVideoToDatabase,
+  saveClipsToDatabase
 } from "@/lib/api";
 
 // API endpoint from environment variable
@@ -137,7 +140,13 @@ export default function HomeSidebar() {
     role?: string;
     image?: string | null;
   } | null>(null);
-  
+
+  // Add this state at the top with other state declarations
+  const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
+
+  // Add loading state for clips
+  const [isLoadingClips, setIsLoadingClips] = useState(false);
+
   // Fetch session data from our API endpoint
   useEffect(() => {
     const fetchSession = async () => {
@@ -147,10 +156,10 @@ export default function HomeSidebar() {
         if (!response.ok) {
           throw new Error('Failed to fetch session');
         }
-        
+
         const data = await response.json();
         setUser(data.user);
-        
+
         // Set isAdmin based on the user role
         if (data.user?.role === Role.ADMIN) {
           setIsAdmin(true);
@@ -161,27 +170,83 @@ export default function HomeSidebar() {
         console.error('Error fetching session:', error);
       }
     };
-    
+
     fetchSession();
+
+    // Fetch clips from database when component mounts
+    fetchClipsFromDatabase();
   }, []);
+
+  // Add function to fetch clips from database
+  const fetchClipsFromDatabase = async () => {
+    try {
+      setIsLoadingClips(true);
+
+      // Make API request with pagination
+      const response = await fetch(`/api/clips?page=${currentPage}&limit=${clipsPerPage}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch clips: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update state with fetched clips
+      setProcessedClips(data.clips);
+
+      // For backward compatibility, extract clip filenames
+      const clipFilenames = data.clips.map((clip: ProcessedClip) =>
+        clip.videoResult.metadata.filename
+      );
+      setClipsList(clipFilenames);
+
+      // Get subtitle filenames
+      const subtitleFilenames = data.clips
+        .filter((clip: ProcessedClip) => clip.subtitleResult)
+        .map((clip: ProcessedClip) => clip.subtitleResult?.metadata.video_filename || '');
+      setSubtitlesList(subtitleFilenames);
+
+      // Update pagination information
+      const totalPages = data.pagination.totalPages;
+      // If current page is higher than total pages, go to last page
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(totalPages);
+      }
+
+      setIsLoadingClips(false);
+    } catch (error) {
+      console.error('Error fetching clips:', error);
+      toast({
+        title: "Error Loading Clips",
+        description: "Failed to load clips from database",
+        variant: "destructive",
+      });
+      setIsLoadingClips(false);
+    }
+  };
+
+  // Fetch clips when page changes
+  useEffect(() => {
+    fetchClipsFromDatabase();
+  }, [currentPage]);
 
   // Calculate total pages - updated to work with both new and old API responses
   const totalClipsCount = processedClips.length > 0 ? processedClips.length : clipsList.length;
   const totalPages = Math.ceil(totalClipsCount / clipsPerPage);
-  
+
   // Get current clips - updated to work with both new and old API responses
   const indexOfLastClip = currentPage * clipsPerPage;
   const indexOfFirstClip = indexOfLastClip - clipsPerPage;
   const currentClips = clipsList.slice(indexOfFirstClip, indexOfLastClip);
   const currentProcessedClips = processedClips.slice(indexOfFirstClip, indexOfLastClip);
-  
+
   // Change page
   const goToNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
   };
-  
+
   const goToPreviousPage = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
@@ -189,10 +254,14 @@ export default function HomeSidebar() {
   };
 
   const clearStorage = () => {
-    localStorage.removeItem('clipsList');
-    localStorage.removeItem('subtitlesList');
-    localStorage.removeItem('processedClips');
-    localStorage.removeItem('uploadedVideo');
+    // Show confirmation toast before clearing
+    toast({
+      title: "Clearing Display",
+      description: "Cleared display (data remains in database)",
+      variant: "default",
+    });
+    
+    // Reset state
     setClipsList([]);
     setSubtitlesList([]);
     setProcessedClips([]);
@@ -206,86 +275,17 @@ export default function HomeSidebar() {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
+    
+    // Refresh data from database
+    fetchClipsFromDatabase();
+    fetchUploadedVideosFromDatabase();
   };
 
-  // Only load clip data from localStorage, not user data
+  // Fetch uploaded videos from database instead of localStorage
   useEffect(() => {
-    const savedClips = localStorage.getItem('clipsList');
-    const savedSubtitles = localStorage.getItem('subtitlesList');
-    const savedProcessedClips = localStorage.getItem('processedClips');
-    const savedVideo = localStorage.getItem('uploadedVideo');
-    
-    if (savedClips) {
-      try {
-      setClipsList(JSON.parse(savedClips));
-      } catch (e) {
-        console.error("Error parsing saved clips:", e);
-    }
-    }
-    
-    if (savedSubtitles) {
-      try {
-      setSubtitlesList(JSON.parse(savedSubtitles));
-      } catch (e) {
-        console.error("Error parsing saved subtitles:", e);
-      }
-    }
-    
-    if (savedProcessedClips) {
-      try {
-        setProcessedClips(JSON.parse(savedProcessedClips));
-      } catch (e) {
-        console.error("Error parsing saved processed clips:", e);
-      }
-    }
-    
-    if (savedVideo) {
-      try {
-      const videoData = JSON.parse(savedVideo);
-        if (videoData.url) {
-      setUploadedVideo({
-            file: null, // We can't restore the actual file object from localStorage
-        url: videoData.url,
-        status: videoData.status,
-        name: videoData.name,
-            size: videoData.size,
-            progress: videoData.progress,
-            error: null
-      });
-        }
-      } catch (e) {
-        console.error("Error parsing saved video:", e);
-      }
-    }
+    // Fetch videos from database
+    fetchUploadedVideosFromDatabase();
   }, []);
-
-  // Save processed clips to localStorage when they change
-  useEffect(() => {
-    if (processedClips.length > 0) {
-      localStorage.setItem('processedClips', JSON.stringify(processedClips));
-    }
-    
-    if (clipsList.length > 0) {
-      localStorage.setItem('clipsList', JSON.stringify(clipsList));
-    }
-    
-    if (subtitlesList.length > 0) {
-      localStorage.setItem('subtitlesList', JSON.stringify(subtitlesList));
-    }
-  }, [clipsList, subtitlesList, processedClips]);
-
-  useEffect(() => {
-    if (uploadedVideo.url) {
-      const videoData = {
-        url: uploadedVideo.url,
-        status: uploadedVideo.status,
-        name: uploadedVideo.file?.name,
-        size: uploadedVideo.file?.size,
-        progress: uploadedVideo.progress
-      };
-      localStorage.setItem('uploadedVideo', JSON.stringify(videoData));
-    }
-  }, [uploadedVideo]);
 
   // Cleanup polling interval on unmount
   useEffect(() => {
@@ -300,103 +300,222 @@ export default function HomeSidebar() {
   const fetchJobDetails = async (id: string) => {
     try {
       const response = await getJobDetails(id);
-      
+
       // Check if the response is OK
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Job details error:", errorText);
         throw new Error(`API error: ${response.status} ${response.statusText}`);
       }
-      
+
       const detailsData = await response.json();
       console.log("Job details:", detailsData);
-      
+
       // Check if job failed
       if (detailsData.status === "failed") {
         const errorMessage = detailsData.error || detailsData.detail || "Job processing failed";
         console.error("Job failed:", errorMessage);
-        setUploadedVideo(prev => ({ 
-          ...prev, 
+
+        // Show error toast
+        toast({
+          title: "Processing Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+
+        // Update video status in database
+        try {
+          const videoRecords = await fetch(`/api/videos?status=processing`);
+          const videoData = await videoRecords.json();
+          
+          if (videoData.videos && videoData.videos.length > 0) {
+            // Look for any processing videos that match our job
+            const processingVideo = videoData.videos.find(
+              (v: any) => v.originalUrl && v.originalUrl.includes(id)
+            );
+            
+            if (processingVideo) {
+              await fetch(`/api/videos/${processingVideo.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  status: 'failed',
+                  error: errorMessage
+                })
+              });
+              console.log("Updated video status in database to failed");
+            }
+          }
+        } catch (dbError) {
+          console.error("Failed to update video status in database:", dbError);
+        }
+
+        setUploadedVideo(prev => ({
+          ...prev,
           status: "failed",
           error: `Processing failed: ${errorMessage}`
         }));
         setIsUploading(false);
         return;
       }
-      
+
       if (detailsData.status === "completed" && Array.isArray(detailsData.results)) {
         // Process results
         const videoResults = detailsData.results.filter(
           (result: JobResult) => result.result_type === "video"
         ) as VideoResult[];
-        
+
         const subtitleResults = detailsData.results.filter(
           (result: JobResult) => result.result_type === "subtitles"
         ) as SubtitleResult[];
-        
+
         const wordTimestampResults = detailsData.results.filter(
           (result: JobResult) => result.result_type === "word_timestamps"
         ) as WordTimestampsResult[];
-        
+
         console.log("Video results:", videoResults);
         console.log("Subtitle results:", subtitleResults);
         console.log("Word timestamp results:", wordTimestampResults);
-        
+
         // Check if we have any video results
         if (videoResults.length === 0) {
+          // Show error toast
+          toast({
+            title: "Processing Error",
+            description: "No video results were generated",
+            variant: "destructive",
+          });
+
           throw new Error("No video results were generated");
         }
-        
+
         // Group related items together
         const processedClips: ProcessedClip[] = videoResults.map(videoResult => {
           const videoFilename = videoResult.metadata.filename;
-          
+
           // Find matching subtitle and word timestamp files
           const subtitleResult = subtitleResults.find(
             s => s.metadata.video_filename === videoFilename
           );
-          
+
           const wordTimestampsResult = wordTimestampResults.find(
             w => w.metadata.video_filename === videoFilename
           );
-          
+
           return {
             videoResult,
             subtitleResult,
             wordTimestampsResult
           };
         });
-        
+
         console.log("Processed clips:", processedClips);
-        
+
         // Update state with processed results
         setProcessedClips(processedClips);
         setUploadedVideo(prev => ({ ...prev, status: "completed" }));
-        
+
         // Also maintain backward compatibility with old format
         const clipFilenames = videoResults.map(v => v.metadata.filename);
         const subtitleFilenames = subtitleResults.map(s => s.metadata.video_filename);
-        
+
         setClipsList(clipFilenames);
         setSubtitlesList(subtitleFilenames);
-        
+
         // Set progress to 100% when complete
         setJobProgress(100);
         setUploadStatus("Processing complete!");
+
+        // Add toast notification for completed processing
+        toast({
+          title: "Processing Complete",
+          description: `Successfully created ${processedClips.length} video clips`,
+          variant: "default",
+        });
+
+        // Update video status in database and save clips
+        try {
+          const videoRecords = await fetch(`/api/videos?status=processing`);
+          const videoData = await videoRecords.json();
+          
+          if (videoData.videos && videoData.videos.length > 0) {
+            // Look for any processing videos that match our job
+            const processingVideo = videoData.videos.find(
+              (v: any) => v.originalUrl && v.originalUrl.includes(id)
+            );
+            
+            if (processingVideo) {
+              // First update video status to completed
+              await fetch(`/api/videos/${processingVideo.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  status: 'completed',
+                  processedAt: new Date().toISOString()
+                })
+              });
+              console.log("Updated video status in database to completed");
+
+              // Then save the generated clips
+              try {
+                const saveClipsResponse = await saveClipsToDatabase(
+                  processingVideo.id,
+                  processedClips
+                );
+                
+                if (saveClipsResponse.ok) {
+                  const saveClipsData = await saveClipsResponse.json();
+                  console.log("Saved clips to database:", saveClipsData);
+                  
+                  // Refresh clips from database after saving
+                  fetchClipsFromDatabase();
+                  // Also refresh the uploaded video data
+                  fetchUploadedVideosFromDatabase();
+                } else {
+                  console.error("Failed to save clips to database:", await saveClipsResponse.text());
+                }
+              } catch (clipSaveError) {
+                console.error("Error saving clips to database:", clipSaveError);
+              }
+            }
+          }
+        } catch (dbError) {
+          console.error("Failed to update video status in database:", dbError);
+        }
       } else {
         console.error("Invalid job details response:", detailsData);
-        setUploadedVideo(prev => ({ 
-          ...prev, 
+
+        // Show error toast
+        toast({
+          title: "Processing Failed",
+          description: "Failed to process video: Invalid result format",
+          variant: "destructive",
+        });
+
+        setUploadedVideo(prev => ({
+          ...prev,
           status: "failed",
-          error: "Failed to process video: Invalid result format" 
+          error: "Failed to process video: Invalid result format"
         }));
       }
     } catch (error: any) {
       console.error("Error fetching job details:", error);
-      setUploadedVideo(prev => ({ 
-        ...prev, 
+
+      // Show error toast
+      toast({
+        title: "Processing Error",
+        description: error.message || "Failed to retrieve processing results",
+        variant: "destructive",
+      });
+
+      setUploadedVideo(prev => ({
+        ...prev,
         status: "failed",
-        error: error.message || "Failed to retrieve processing results" 
+        error: error.message || "Failed to retrieve processing results"
       }));
     } finally {
       setIsUploading(false);
@@ -406,33 +525,33 @@ export default function HomeSidebar() {
   // Poll for job status updates
   useEffect(() => {
     if (!jobId) return;
-    
+
     console.log('Starting job polling for ID:', jobId);
-    
+
     // Set initial progress
     setJobProgress(40);
-    
+
     // This function is called every 5 seconds to check job status
     const intervalId = setInterval(async () => {
       if (!jobId) {
         clearInterval(intervalId);
         return;
       }
-      
+
       try {
         console.log('Polling job status for ID:', jobId);
         const response = await getJobStatus(jobId);
-        
+
         // Check if the response is OK
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Job status error:", errorText);
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         console.log('Job status:', data);
-        
+
         // Update progress bar - ensure we show at least 40% progress even if the API doesn't return a progress value
         if (data.progress && typeof data.progress === 'number') {
           setJobProgress(Math.max(40, data.progress));
@@ -440,14 +559,14 @@ export default function HomeSidebar() {
           // If no progress but still processing, increment progress slightly
           setJobProgress(prev => Math.min(prev + 5, 90)); // Increment but cap at 90%
         }
-        
+
         // Update status message
         if (data.status_message) {
           setUploadStatus(data.status_message);
         } else {
           setUploadStatus(`Processing job: ${data.status}`);
         }
-        
+
         if (data.status === 'completed') {
           console.log('Job completed, fetching details');
           clearInterval(intervalId);
@@ -455,10 +574,10 @@ export default function HomeSidebar() {
         } else if (data.status === 'failed') {
           console.error('Job failed:', data);
           clearInterval(intervalId);
-          
+
           const errorMessage = data.error || data.detail || "Unknown error";
-          setUploadedVideo(prev => ({ 
-            ...prev, 
+          setUploadedVideo(prev => ({
+            ...prev,
             status: "failed",
             error: `Processing failed: ${errorMessage}`
           }));
@@ -470,10 +589,10 @@ export default function HomeSidebar() {
         setUploadStatus(`Checking status... (${error.message || "Network error"})`);
       }
     }, 5000); // Poll every 5 seconds
-    
+
     // Save the interval reference for cleanup
     pollingIntervalRef.current = intervalId;
-    
+
     // Cleanup interval on unmount or when jobId changes
     return () => {
       clearInterval(intervalId);
@@ -491,77 +610,203 @@ export default function HomeSidebar() {
   // Upload video to backend API
   const uploadVideo = async (file: File) => {
     if (!file) return;
-    setIsUploading(true);
-    
-    // Create preview URL for the file
-    const preview = URL.createObjectURL(file);
-    
-    setImportVideo(false);
-    setUploadedVideo({ 
-      file, 
-      url: preview, 
-      status: "processing",
-      name: file.name,
-      size: file.size,
-      progress: 0,
-      error: null
-    });
-    setVideosOpen(true);
-    
-    // Set initial progress and status message
-    setJobProgress(10);
-    setUploadStatus("Uploading video for processing...");
-    
+
     try {
+      // Check if user can upload
+      const uploadCheckResponse = await fetch('/api/user/can-upload');
+      const uploadCheckData = await uploadCheckResponse.json();
+
+      if (!uploadCheckData.allowed) {
+        // Show subscription required message with toast
+        toast({
+          title: "Subscription Required",
+          description: uploadCheckData.message,
+          variant: "destructive",
+        });
+
+        // Update UI with error
+        setUploadedVideo({
+          file,
+          url: URL.createObjectURL(file),
+          status: "failed",
+          name: file.name,
+          size: file.size,
+          progress: 0,
+          error: uploadCheckData.message
+        });
+
+        // Check if we need to redirect to pricing page
+        if (uploadCheckData.redirectTo === '/dashboard/pricing') {
+          // Set timeout to show the message briefly before redirecting
+          setTimeout(() => {
+            router.push('/dashboard/pricing');
+          }, 1500);
+        } else {
+          // Just show the subscription dialog without redirect
+          setShowSubscriptionDialog(true);
+        }
+        return;
+      }
+
+      // Show upload started toast
+      toast({
+        title: "Upload Started",
+        description: "Your video is being uploaded and processed",
+        variant: "default",
+      });
+
+      // Continue with existing upload logic
+      setIsUploading(true);
+
+      // Create preview URL for the file
+      const preview = URL.createObjectURL(file);
+
+      setImportVideo(false);
+      setUploadedVideo({
+        file,
+        url: preview,
+        status: "processing",
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        error: null
+      });
+      setVideosOpen(true);
+
+      // Get exact video duration using HTML5 Video API
+      const getExactVideoDuration = (videoFile: File): Promise<number> => {
+        return new Promise((resolve) => {
+          const video = document.createElement('video');
+          video.preload = 'metadata';
+          video.onloadedmetadata = () => {
+            window.URL.revokeObjectURL(video.src);
+            resolve(video.duration);
+          };
+          video.src = URL.createObjectURL(videoFile);
+        });
+      };
+
+      // Get exact duration in seconds
+      const exactDuration = await getExactVideoDuration(file);
+      console.log(`Exact video duration: ${exactDuration} seconds`);
+
+      // Set initial progress and status message
+      setJobProgress(10);
+      setUploadStatus("Uploading video for processing...");
+
       console.log("Creating video processing job");
-      const response = await createVideoProcessingJob(file, 3);
-      
+      const jobResponse = await createVideoProcessingJob(file, 3);
+
       // Set progress after request is sent
       setJobProgress(30);
       setUploadStatus("Video uploaded, starting job...");
-      
+
       // Check if the request itself failed
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!jobResponse.ok) {
+        const errorText = await jobResponse.text();
         console.error("API error:", errorText);
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+        throw new Error(`API error: ${jobResponse.status} ${jobResponse.statusText}`);
       }
-      
-      const data = await response.json();
-      console.log("API Response:", data);
+
+      const jobData = await jobResponse.json();
+      console.log("API Response:", jobData);
 
       // Check if the response contains an error
-      if (data.error || data.detail) {
-        const errorMessage = data.error || data.detail || "Unknown error";
+      if (jobData.error || jobData.detail) {
+        const errorMessage = jobData.error || jobData.detail || "Unknown error";
         console.error("API error:", errorMessage);
-        
+
         // Update UI with error
-        setUploadedVideo(prev => ({ 
-          ...prev, 
+        setUploadedVideo(prev => ({
+          ...prev,
           status: "failed",
           error: `Processing error: ${errorMessage}`
         }));
         setIsUploading(false);
         return;
       }
-      
+
       // Handle successful job creation response
-      if (data.job_id) {
+      if (jobData.job_id) {
         // Set job ID to start polling
-        setJobId(data.job_id);
+        setJobId(jobData.job_id);
         // Update status message with the estimated time
-        const estimatedTime = data.estimated_completion_time || 60;
+        const estimatedTime = jobData.estimated_completion_time || 60;
         setUploadStatus(`Processing started. Estimated time: ${Math.round(estimatedTime)} seconds`);
         // Set initial progress
         setJobProgress(40);
+
+        // Show processing started toast
+        toast({
+          title: "Processing Started",
+          description: `Estimated time: ${Math.round(estimatedTime)} seconds`,
+          variant: "default",
+        });
+
+        // Make sure we have a user session before saving to database
+        if (!user?.id) {
+          // Try to fetch fresh session data
+          try {
+            const sessionResponse = await fetch(`/api/user/session?t=${Date.now()}`);
+            if (sessionResponse.ok) {
+              const sessionData = await sessionResponse.json();
+              if (sessionData.user?.id) {
+                // Update user state
+                setUser(sessionData.user);
+
+                // Save video with fresh user ID and exact duration
+                await saveVideoToDatabase(
+                  sessionData.user.id,
+                  file,
+                  jobData.job_id,
+                  exactDuration
+                );
+                console.log("Video saved to database with refreshed user ID and exact duration");
+              } else {
+                console.error("Session data doesn't contain user ID");
+              }
+            }
+          } catch (sessionError) {
+            console.error("Failed to refresh session:", sessionError);
+          }
+        } else {
+          // Save video information to database with existing user ID
+          try {
+            console.log("Saving video to database for user:", user.id);
+            const dbSaveResponse = await saveVideoToDatabase(
+              user.id,
+              file,
+              jobData.job_id,
+              exactDuration
+            );
+
+            if (!dbSaveResponse.ok) {
+              const errorData = await dbSaveResponse.json();
+              console.error("Failed to save video to database:", errorData);
+            } else {
+              const savedData = await dbSaveResponse.json();
+              console.log("Video saved to database:", savedData);
+            }
+          } catch (dbError) {
+            console.error("Error saving video to database:", dbError);
+            // Don't fail the upload process if database save fails
+          }
+        }
       } else {
         throw new Error("Invalid API response: No job_id returned");
       }
     } catch (error: any) {
       console.error("Error:", error);
-      
-      setUploadedVideo(prev => ({ 
-        ...prev, 
+
+      // Show error toast
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Upload failed. Please try again.",
+        variant: "destructive",
+      });
+
+      setUploadedVideo(prev => ({
+        ...prev,
         status: "failed",
         error: error.message || "Upload failed. Please try again."
       }));
@@ -575,39 +820,94 @@ export default function HomeSidebar() {
     if (jobId) {
       try {
         console.log("Cancelling job:", jobId);
-        
+
+        // Show cancelling toast
+        toast({
+          title: "Cancelling Job",
+          description: "Your video processing job is being cancelled",
+          variant: "default",
+        });
+
         // Stop polling
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
-        
+
         // Call API to cancel the job
         const response = await cancelJob(jobId);
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Job cancellation error:", errorText);
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
-        
+
         // Check response
         const data = await response.json();
         console.log("Cancellation response:", data);
         
+        // Update video status in database
+        try {
+          const videoRecords = await fetch(`/api/videos?status=processing`);
+          const videoData = await videoRecords.json();
+          
+          if (videoData.videos && videoData.videos.length > 0) {
+            // Look for any processing videos that match our job
+            const processingVideo = videoData.videos.find(
+              (v: any) => v.originalUrl && v.originalUrl.includes(jobId)
+            );
+            
+            if (processingVideo) {
+              await fetch(`/api/videos/${processingVideo.id}/status`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  status: 'canceled',
+                  error: "Job cancelled by user"
+                })
+              });
+              console.log("Updated video status in database to canceled");
+            }
+          }
+        } catch (dbError) {
+          console.error("Failed to update video status in database:", dbError);
+        }
+        
         // Reset state
         setUploadedVideo(prev => ({ 
           ...prev, 
-          status: null,
-          error: "Processing cancelled by user"
+          status: "failed",
+          error: "Job cancelled by user"
         }));
         setJobId(null);
         setJobProgress(0);
         setIsUploading(false);
+        
+        // Refresh videos from database
+        fetchUploadedVideosFromDatabase();
+        
+        // Show cancelled toast
+        toast({
+          title: "Job Cancelled",
+          description: "Your video processing job has been cancelled",
+          variant: "default",
+        });
+
       } catch (error: any) {
         console.error("Error cancelling job:", error);
-        setUploadedVideo(prev => ({ 
-          ...prev, 
+
+        // Show error toast
+        toast({
+          title: "Cancellation Failed",
+          description: error.message || "Failed to cancel job",
+          variant: "destructive",
+        });
+
+        setUploadedVideo(prev => ({
+          ...prev,
           status: "failed",
           error: `Failed to cancel: ${error.message || "Unknown error"}`
         }));
@@ -616,10 +916,10 @@ export default function HomeSidebar() {
     } else {
       // No job ID, just clean up the UI
       console.log("Cancelling video processing (no server job)");
-      
+
       // Reset state
-      setUploadedVideo(prev => ({ 
-        ...prev, 
+      setUploadedVideo(prev => ({
+        ...prev,
         status: null,
         error: "Processing cancelled by user"
       }));
@@ -649,7 +949,7 @@ export default function HomeSidebar() {
       image: <img src="/short_to_short.webp" alt="Short to Short" className="w-40 mx-auto" />,
       altText: "Short to Short",
       label: "Subtitle and edit my Short",
-      onClickHandler: () => {}
+      onClickHandler: () => { }
     },
     {
       image: <img src="/video_to_short.webp" alt="Short to Short" className="w-40 mx-auto" />,
@@ -661,13 +961,13 @@ export default function HomeSidebar() {
       image: <img src="/faceless.webp" alt="Short to Short" className="h-32 -mt-1 mx-auto rounded-md" />,
       altText: "Faceless Short",
       label: "Create Faceless video",
-      onClickHandler: () => {}
+      onClickHandler: () => { }
     },
   ];
 
-  const ErrorDisplay = ({error}: {error: string | null | undefined}) => {
+  const ErrorDisplay = ({ error }: { error: string | null | undefined }) => {
     if (!error) return null;
-    
+
     return (
       <div className="mt-2 p-3 bg-red-100 text-red-700 rounded-md">
         <p className="text-sm font-medium flex items-start">
@@ -678,10 +978,61 @@ export default function HomeSidebar() {
     );
   };
 
+  // Add function to fetch videos from database
+  const fetchUploadedVideosFromDatabase = async () => {
+    try {
+      // Make API request to get videos
+      const response = await fetch('/api/videos?limit=1');
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch videos: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Check if there are any videos
+      if (data.videos && data.videos.length > 0) {
+        const lastUploadedVideo = data.videos[0]; // Get the most recent video
+        
+        // Only update if there's no active upload
+        if (!isUploading && (!uploadedVideo.status || uploadedVideo.status === "failed" || uploadedVideo.status === "completed")) {
+          setUploadedVideo({
+            file: null,
+            url: lastUploadedVideo.originalUrl,
+            status: lastUploadedVideo.status,
+            name: lastUploadedVideo.title,
+            size: lastUploadedVideo.fileSize,
+            error: lastUploadedVideo.error || null
+          });
+          
+          // If the video was in processing status, show the appropriate UI
+          if (lastUploadedVideo.status === "processing") {
+            // Try to get the job ID from the URL if available
+            const jobIdMatch = lastUploadedVideo.originalUrl.match(/job_id=([^&]+)/);
+            if (jobIdMatch && jobIdMatch[1]) {
+              setJobId(jobIdMatch[1]);
+              setJobProgress(40); // Default progress for ongoing jobs
+            }
+          }
+        }
+        
+        // Set videosOpen to true if there are videos
+        setVideosOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+      toast({
+        title: "Error Loading Videos",
+        description: "Failed to load videos from database",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Rest of the component is UI rendering
   return (
     <div className="">
-      <HomeHeader pageName={"Home"}/>
+      <HomeHeader pageName={"Home"} />
 
       <main className="p-10 w-full bg-bgWhite">
         <div className="">
@@ -693,23 +1044,23 @@ export default function HomeSidebar() {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mx-auto gap-1 -mt-10 px-0 sm:px-7">
             {createBtns.map((btn, index) => (
               <div key={index} className="relative text-center overflow-hidden" >
-              <motion.button
-                whileHover={{ scale: 1.05 }}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
                   onClick={btn.onClickHandler}
-                className="relative px-10 py-1 bg-bgWhite rounded-lg shadow-lg shadow-gray-700/10 border text-center cursor-pointer overflow-hidden h-36 w-64"
-              >
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  whileHover={{ opacity: 1 }}
-                  className="absolute top-0 left-0 right-0 bottom-0 bg-yellow bg-opacity-85 flex items-center justify-center text-gray-900 font-semibold text-lg"
+                  className="relative px-10 py-1 bg-bgWhite rounded-lg shadow-lg shadow-gray-700/10 border text-center cursor-pointer overflow-hidden h-36 w-64"
                 >
-                  Start
-                </motion.p>
-              {btn.image}
-              </motion.button>
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    whileHover={{ opacity: 1 }}
+                    className="absolute top-0 left-0 right-0 bottom-0 bg-yellow bg-opacity-85 flex items-center justify-center text-gray-900 font-semibold text-lg"
+                  >
+                    Start
+                  </motion.p>
+                  {btn.image}
+                </motion.button>
 
-              <p className="mt-4">{btn.label}</p>
-            </div>
+                <p className="mt-4">{btn.label}</p>
+              </div>
             ))}
           </div>
         </div>
@@ -729,42 +1080,41 @@ export default function HomeSidebar() {
                 <input type="text" placeholder="Search" className="w-full p-1 pl-8 border rounded-md" />
               </div>
               <Link href="/dashboard/schedule" className="flex gap-2 items-center border px-3 py-1 rounded-md"><GrSchedule /> Schedule</Link>
-              <button 
-                onClick={clearStorage}
-                className="flex gap-2 items-center border px-3 py-1 rounded-md text-red-500 hover:bg-red-50"
-              >
-                Clear All
-              </button>
             </div>
           </div>
 
-          {/* My Shorts Section - Updated to support both APIs */}
-          {(processedClips.length > 0 || clipsList.length > 0) ? (
+          {/* My Shorts Section - Updated to support database fetching */}
+          {isLoadingClips ? (
+            <div className="flex justify-center items-center h-72 mt-6">
+              <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="ml-3 text-gray-700">Loading clips...</p>
+            </div>
+          ) : (processedClips.length > 0 || clipsList.length > 0) ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
                 {/* New API display (primary) */}
-                {processedClips.length > 0 ? 
+                {processedClips.length > 0 ?
                   currentProcessedClips.map((clip, index) => {
                     const actualIndex = indexOfFirstClip + index;
                     const { videoResult, subtitleResult, wordTimestampsResult } = clip;
-                    
+
                     // Fix URLs to prevent duplication
                     const videoUrl = getFullUrl(videoResult.url);
-                      
+
                     const subtitleUrl = subtitleResult?.url
                       ? getFullUrl(subtitleResult.url)
                       : null;
-                      
+
                     const wordTimestampsUrl = wordTimestampsResult?.url
                       ? getFullUrl(wordTimestampsResult.url)
                       : null;
-                    
+
                     console.log("Constructed video URL:", videoUrl);
-                    
+
                     return (
                       <div key={videoResult.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                         <div className="relative aspect-[9/16] bg-black">
-                          <video 
+                          <video
                             className="w-full h-full object-cover"
                             controls
                             src={videoUrl}
@@ -775,10 +1125,12 @@ export default function HomeSidebar() {
                         </div>
                         <div className="p-2">
                           <h3 className="font-medium text-xs">
-                            {videoResult.metadata.title || `Short Clip ${actualIndex + 1}`}
+                            {videoResult.metadata.title
+                              ? videoResult.metadata.title.split(" ").slice(0, 4).join(" ")
+                              : `Short Clip ${actualIndex + 1}`}
                           </h3>
                           <div className="flex justify-between items-center mt-2">
-                            <a 
+                            <a
                               href={videoUrl}
                               download={videoResult.metadata.filename}
                               className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
@@ -788,12 +1140,12 @@ export default function HomeSidebar() {
                               <Download size={14} />
                               <span>Download</span>
                             </a>
-                            <button 
+                            <button
                               onClick={() => {
                                 // Navigate to edit page with both video and word timestamps parameters
                                 const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(videoResult.metadata.filename)}`;
                                 const finalUrl = wordTimestampsResult?.url ? `${editUrl}&wordTimestampsUrl=${encodeURIComponent(getFullUrl(wordTimestampsResult.url))}` : editUrl;
-                                
+
                                 console.log("Navigating to edit URL:", finalUrl);
                                 router.push(finalUrl);
                               }}
@@ -812,88 +1164,88 @@ export default function HomeSidebar() {
                   currentClips.map((clipFilename, index) => {
                     const videoUrl = getVideoUrl(clipFilename);
                     const wordTimestampsUrl = getWordTimestampsUrl(clipFilename.replace('final_', ''));
-                  const actualIndex = indexOfFirstClip + index;
-                  
-                  return (
-                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                      <div className="relative aspect-[9/16] bg-black">
-                        <video 
-                          className="w-full h-full object-cover"
-                          controls
-                          src={videoUrl}
-                          onError={(e) => {
-                            console.error("Video loading error for:", clipFilename, e);
-                          }}
-                        />
-                      </div>
-                      <div className="p-2">
-                        <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
-                        <div className="flex justify-between items-center mt-2">
-                          <a 
-                            href={videoUrl}
-                            download={clipFilename}
-                            className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Download size={14} />
-                            <span>Download</span>
-                          </a>
-                          <button 
-                            onClick={() => {
-                              // Get the video filename without the "final_" prefix
-                              const originalVideoName = clipFilename.replace('final_', '');
-                              
-                              // Construct the URLs
+                    const actualIndex = indexOfFirstClip + index;
+
+                    return (
+                      <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                        <div className="relative aspect-[9/16] bg-black">
+                          <video
+                            className="w-full h-full object-cover"
+                            controls
+                            src={videoUrl}
+                            onError={(e) => {
+                              console.error("Video loading error for:", clipFilename, e);
+                            }}
+                          />
+                        </div>
+                        <div className="p-2">
+                          <h3 className="font-medium text-sm">Short Clip {actualIndex + 1}</h3>
+                          <div className="flex justify-between items-center mt-2">
+                            <a
+                              href={videoUrl}
+                              download={clipFilename}
+                              className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Download size={14} />
+                              <span>Download</span>
+                            </a>
+                            <button
+                              onClick={() => {
+                                // Get the video filename without the "final_" prefix
+                                const originalVideoName = clipFilename.replace('final_', '');
+
+                                // Construct the URLs
                                 const videoUrl = getVideoUrl(clipFilename);
                                 const wordTimestampsUrl = getWordTimestampsUrl(originalVideoName);
-                              
+
                                 // Navigate to edit page with both video and word timestamps parameters
-                              const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
+                                const editUrl = `/dashboard/edit?videoUrl=${encodeURIComponent(videoUrl)}&videoName=${encodeURIComponent(originalVideoName)}`;
                                 const finalUrl = `${editUrl}&wordTimestampsUrl=${encodeURIComponent(wordTimestampsUrl)}`;
-                              
-                              router.push(finalUrl);
-                            }}
-                            className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
-                          >
-                            <Edit2 size={14} />
-                            <span>Edit</span>
-                          </button>
+
+                                router.push(finalUrl);
+                              }}
+                              className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                            >
+                              <Edit2 size={14} />
+                              <span>Edit</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
+                    );
                   })
                 }
               </div>
-              
+
               {/* Pagination Controls */}
               {totalPages > 1 && (
                 <div className="flex justify-center items-center mt-6 gap-4">
-                  <button 
-                    onClick={goToPreviousPage} 
+                  <button
+                    onClick={goToPreviousPage}
                     disabled={currentPage === 1}
                     className={`p-2 rounded-md border ${currentPage === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
                   >
                     <ChevronLeft size={18} />
                   </button>
-                  
+
                   <span className="text-sm font-medium">{currentPage} of {totalPages}</span>
-                  
-                  <button 
-                    onClick={goToNextPage} 
+
+                  <button
+                    onClick={goToNextPage}
                     disabled={currentPage === totalPages}
                     className={`p-2 rounded-md border ${currentPage === totalPages ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
                   >
                     <ChevronRight size={18} />
                   </button>
-                  
+
                   <span className="text-sm text-gray-500">Videos per page: <span className="font-medium">6</span></span>
                 </div>
               )}
             </>
           ) : (
-            <button 
+            <button
               onClick={() => setImportVideo(true)}
               className="w-full h-72 mt-6 p-6 flex flex-col gap-3 items-center justify-center border-2 border-dashed border-gray-300 bg-slate50 hover:bg-slateHover50 rounded-xl text-gray-400 cursor-pointer"
             >
@@ -925,7 +1277,7 @@ export default function HomeSidebar() {
                 <div className="mt-6 border rounded-lg overflow-hidden">
                   <div className="flex items-center p-4 gap-4">
                     <div className="w-48 h-32 bg-black rounded-lg overflow-hidden">
-                      <video 
+                      <video
                         src={uploadedVideo.url}
                         className="w-full h-full object-cover"
                         controls
@@ -936,9 +1288,9 @@ export default function HomeSidebar() {
                       <p className="text-sm text-gray-500 mt-1">
                         {uploadedVideo.size ? (uploadedVideo.size / (1024 * 1024)).toFixed(2) : 0} MB
                       </p>
-                      
+
                       {/* Upload status and progress indicator */}
-                        {uploadedVideo.status === "processing" && (
+                      {uploadedVideo.status === "processing" && (
                         <div className="mt-4">
                           <div className="flex flex-col space-y-2">
                             <div className="flex justify-between items-center">
@@ -946,8 +1298,8 @@ export default function HomeSidebar() {
                               <p className="text-sm font-medium text-gray-900">{Math.round(jobProgress)}%</p>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-2.5">
-                              <div 
-                                className="bg-purple-600 h-2.5 rounded-full" 
+                              <div
+                                className="bg-purple-600 h-2.5 rounded-full"
                                 style={{ width: `${jobProgress}%` }}
                               ></div>
                             </div>
@@ -961,23 +1313,23 @@ export default function HomeSidebar() {
                           <ErrorDisplay error={uploadedVideo.error} />
                         </div>
                       )}
-                      
-                        {uploadedVideo.status === "completed" && (
+
+                      {uploadedVideo.status === "completed" && (
                         <span className="text-green-500 inline-flex items-center mt-2">
                           <span className="mr-1">✓</span>
                           Processing completed
                         </span>
-                        )}
-                      
-                        {uploadedVideo.status === "failed" && (
+                      )}
+
+                      {uploadedVideo.status === "failed" && (
                         <ErrorDisplay error={uploadedVideo.error} />
-                        )}
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <button 
-                  onClick={() => setImportVideo(true)} 
+                <button
+                  onClick={() => setImportVideo(true)}
                   className="w-full h-72 mt-6 p-6 flex flex-col gap-3 items-center justify-center border-2 border-dashed border-gray-300 bg-slate50 hover:bg-slateHover50 rounded-xl text-gray-400 cursor-pointer"
                 >
                   <UploadCloud size={24} className="font-semibold" /> No videos found, click here to import a video
@@ -1020,8 +1372,8 @@ export default function HomeSidebar() {
                 <Import size={20} className="text-purple-500" />
                 Import Video
               </h3>
-              <button 
-                onClick={() => setImportVideo(false)} 
+              <button
+                onClick={() => setImportVideo(false)}
                 className="text-gray-400 hover:text-gray-800 hover:bg-gray-100 rounded-full p-1.5 transition-colors"
               >
                 <X size={18} />
@@ -1032,7 +1384,7 @@ export default function HomeSidebar() {
               <div className="mt-6">
                 {previewUrl && (
                   <div className="relative w-full aspect-[9/16] mb-6 bg-black rounded-xl overflow-hidden flex items-center justify-center shadow-md">
-                    <video 
+                    <video
                       src={previewUrl}
                       className="w-full h-full object-contain"
                       controls={false}
@@ -1045,12 +1397,12 @@ export default function HomeSidebar() {
                 <div className="text-center py-4">
                   <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                   <p className="text-gray-700 font-medium">{uploadStatus || "Processing your video..."}</p>
-                  
+
                   {/* Progress bar */}
                   {jobProgress > 0 && (
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mx-auto max-w-xs">
-                      <div 
-                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500" 
+                      <div
+                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
                         style={{ width: `${jobProgress}%` }}
                       ></div>
                     </div>
@@ -1060,7 +1412,7 @@ export default function HomeSidebar() {
             ) : (
               <>
                 {/* YouTube Import Section */}
-                <div className="mt-6">
+                {/* <div className="mt-6">
                   <label className="text-gray-700 font-medium block mb-2">Paste YouTube Link</label>
                   <div className="relative">
                   <input
@@ -1078,23 +1430,22 @@ export default function HomeSidebar() {
                     <Import size={18} />
                     Import from YouTube
                   </button>
-                </div>
+                </div> */}
 
                 {/* OR Divider */}
-                <div className="flex items-center my-6">
+                {/* <div className="flex items-center my-6">
                   <div className="flex-grow h-0.5 bg-gray-200"></div>
                   <span className="mx-4 text-gray-500 font-medium">OR</span>
                   <div className="flex-grow h-0.5 bg-gray-200"></div>
-                </div>
+                </div> */}
 
                 {/* Drag & Drop Upload Section */}
                 <div
                   {...getRootProps()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
-                    isDragActive 
-                      ? "border-purple-500 bg-purple-50" 
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${isDragActive
+                      ? "border-purple-500 bg-purple-50"
                       : "border-gray-300 hover:border-purple-400 hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   <input {...getInputProps()} />
                   {isDragActive ? (
@@ -1122,12 +1473,59 @@ export default function HomeSidebar() {
           <div className="bg-slate-50 shadow-md rounded-lg p-4">
             <div className="mb-2">
               <p className="text-base text-slate-600 mb-2">create new folder</p>
-              <input type="text" placeholder="Folder Name" className="px-2 py-1 border"/>
+              <input type="text" placeholder="Folder Name" className="px-2 py-1 border" />
             </div>
             <div className="flex justify-between">
               <button>Create Folder</button>
               <button className="bg-red-400 text-white px-3 py-1 rounded" onClick={() => setPopUpOpen(prev => !prev)}>
                 Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Subscription required dialog */}
+      {showSubscriptionDialog && (
+        <div className="fixed inset-0 bg-gray-900/70 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-xl font-semibold text-[#343434]">Subscription Required</h3>
+              <button
+                onClick={() => setShowSubscriptionDialog(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <p className="text-[#343434] mb-4">
+                {uploadedVideo.error || "You have used your free video. Subscribe to upload and edit more videos."}
+              </p>
+
+              <div className="bg-purple-50 p-3 rounded-md border border-purple-200 mb-4">
+                <p className="text-sm text-purple-700">
+                  Our subscription plans give you access to premium features and allow you to process multiple videos each month.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowSubscriptionDialog(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-[#343434] hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowSubscriptionDialog(false);
+                  router.push('/dashboard/pricing');
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                View Plans
               </button>
             </div>
           </div>

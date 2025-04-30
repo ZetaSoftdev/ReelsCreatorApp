@@ -589,11 +589,6 @@ export default function ContentPage() {
                               </Select>
                             )}
                             
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={`/admin/content/${video.id}`}>
-                                View
-                              </Link>
-                            </Button>
                             
                             <AlertDialog>
                               <AlertDialogTrigger asChild>

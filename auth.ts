@@ -145,11 +145,19 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
                 },
               });
               
+              // IMPORTANT: Set the user ID to match the database ID
+              console.log("Setting user ID from database:", newUser.id);
+              user.id = newUser.id;
+              
               // Add role to user object
               console.log("Setting new user role to:", Role.USER);
               user.role = Role.USER as any; // Cast to any to avoid type issues
               return true;
             }
+            
+            // IMPORTANT: For existing users, set the user ID to match the database ID
+            console.log("Setting existing user ID from database:", existingUser.id);
+            user.id = existingUser.id;
             
             // Add role with normalization to user object for Google authentication
             console.log("Setting existing user role from database:", existingUser.role);
@@ -178,9 +186,24 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       async session({ session, token }) {
         console.log("Session callback - token:", token);
         
-        if (session.user && token.sub) {
-          // Ensure ID is set
-          session.user.id = token.sub;
+        if (session.user) {
+          // Critical ID check and assignment
+          if (!token.sub) {
+            console.error("CRITICAL ERROR: token.sub is missing in session callback");
+            console.error("This will cause authentication mismatch issues");
+          }
+          
+          // Ensure ID is set - use token.sub as the canonical source, with type safety
+          const userId = token.sub && typeof token.sub === 'string' 
+            ? token.sub 
+            : (token.id && typeof token.id === 'string' ? token.id : undefined);
+            
+          if (userId) {
+            session.user.id = userId;
+            console.log("Session - assigned user ID:", session.user.id);
+          } else {
+            console.error("CRITICAL ERROR: Could not find valid ID in token");
+          }
           
           // Add normalized role from token to session
           console.log("Setting user role from token:", token.role);
@@ -240,8 +263,17 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
       },
       async jwt({ token, user, trigger, session }) {
         if (user) {
-          // Add ID and role to token with normalization
+          // CRITICAL FIX: Set both token.sub and token.id to user.id to ensure consistency
+          // This ensures the token ID (used in session.user.id) matches our database ID
+          token.sub = user.id;
           token.id = user.id;
+          
+          console.log("JWT callback - setting token IDs from user:", {
+            userId: user.id,
+            tokenSub: token.sub,
+            tokenId: token.id
+          });
+          
           token.role = normalizeRole(user.role);
           
           // Add image to token if it exists

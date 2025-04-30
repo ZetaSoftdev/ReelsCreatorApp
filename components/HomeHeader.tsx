@@ -1,5 +1,5 @@
 "use client"
-import { GalleryThumbnails, HelpCircle, LayoutDashboard } from 'lucide-react'
+import { GalleryThumbnails, HelpCircle, LayoutDashboard, CreditCard } from 'lucide-react'
 import Link from 'next/link'
 import React, { useState, useEffect } from 'react'
 // import ThemeToggle from './ThemeToggle'
@@ -8,14 +8,32 @@ import { useSession } from 'next-auth/react'
 
 const HomeHeader = ({pageName}: {pageName: string}) => {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
   const { data: session, status } = useSession();
   
-  // Check if user is admin based on session data instead of localStorage
+  // Check user role and subscription status
   useEffect(() => {
     if (session?.user?.role === Role.ADMIN) {
       setIsAdmin(true);
     } else {
       setIsAdmin(false);
+    }
+    
+    // Check if user has subscription via API
+    const checkSubscription = async () => {
+      try {
+        const response = await fetch('/api/user/subscription');
+        if (response.ok) {
+          const data = await response.json();
+          setIsSubscribed(data.isSubscribed || false);
+        }
+      } catch (error) {
+        console.error('Error checking subscription status:', error);
+      }
+    };
+    
+    if (session?.user) {
+      checkSubscription();
     }
   }, [session]); // Re-run when session changes
   
@@ -29,6 +47,16 @@ const HomeHeader = ({pageName}: {pageName: string}) => {
               Admin Dashboard
             </Link>
           )}
+          <Link 
+            href="/dashboard/subscription" 
+            className="text-gray-500 dark:text-gray-100 hover:text-gray-700 relative flex items-center"
+            title="Manage Subscription"
+          >
+            <CreditCard size={24} />
+            {isSubscribed && (
+              <span className="absolute -top-1 -right-1 bg-green-500 w-2 h-2 rounded-full"></span>
+            )}
+          </Link>
           <Link href="/dashboard/help" className="text-gray-500 dark:text-gray-100 hover:text-gray-700">
             <HelpCircle size={24} />
           </Link>

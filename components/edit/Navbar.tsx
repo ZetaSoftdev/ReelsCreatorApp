@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CaptionPreset } from "./EditSection";
 import { generateASS } from "@/utils/subtitleUtils";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "@/hooks/use-toast";
 
 // Define export stages for tracking progress
 type ExportStage = 
@@ -76,7 +76,11 @@ export default function Navbar({
   // Handle export button click
   const handleExport = async () => {
     if (!videoSrc || !wordTimestampsUrl || !selectedPreset) {
-      alert('Please ensure a video and captions are loaded');
+      toast({
+        title: "Missing Requirements",
+        description: "Please ensure a video and captions are loaded",
+        variant: "destructive",
+      });
       return;
     }
     
@@ -141,7 +145,11 @@ export default function Navbar({
       console.log("Video exported successfully");
     } catch (error) {
       console.error('Error exporting video:', error);
-      alert(`Failed to export video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast({
+        title: "Export Failed",
+        description: `Failed to export video: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      });
     } finally {
       // Small delay before closing to show completion
       setTimeout(() => {
@@ -187,9 +195,9 @@ export default function Navbar({
         <Link href="/dashboard/home" className="border shadow-md py-2 px-3 font-medium flex items-center justify-center gap-1 rounded-md">
           <ChevronLeft size={20} /> Leave
         </Link>
-        <div className="flex items-center gap-2 text-yellow-500">
+        {/* <div className="flex items-center gap-2 text-yellow-500">
           <p className="text-base">{videoTitle}</p>
-        </div>
+        </div> */}
         {/* <Link href="pricing" className="bg-yellow py-2 px-3 text-base flex items-center rounded-md gap-2 hover:shadow-md">
           <Sparkles size={18} /> Upgrade
         </Link> */}

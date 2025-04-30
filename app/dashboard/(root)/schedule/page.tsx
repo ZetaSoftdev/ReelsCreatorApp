@@ -102,7 +102,11 @@ export default function SchedulePage() {
   return (
     <>
       <HomeHeader pageName="Schedule" />
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 w-full flex justify-center items-center h-screen mx-auto">
+        <p>Coming soon...</p>
+      </div>
+
+      {/* <div className="p-6 max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Video Schedule</h1>
           <button className="inline-flex items-center bg-[#1a1a1a] text-white px-3 py-1 rounded-full hover:bg-[#343434] transition-colors">
@@ -184,7 +188,7 @@ export default function SchedulePage() {
             Learn More
           </button>
         </div>
-      </div>
+      </div> */}
     </>
   );
 } 

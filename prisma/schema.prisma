@@ -7,55 +7,58 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  USER
-  ADMIN
-}
-
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  name         String?
-  password     String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  profileImage String?
-  role         Role          @default(USER)
-  subscription Subscription?
-  videos       Video[]
+  id                     String        @id @default(cuid())
+  email                  String        @unique
+  name                   String?
+  password               String?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  profileImage           String?
+  role                   Role          @default(USER)
+  isSubscribed           Boolean       @default(false)
+  stripeCurrentPeriodEnd DateTime?
+  stripeCustomerId       String?
+  stripePriceId          String?
+  stripeSubscriptionId   String?
+  subscription           Subscription?
+  videos                 Video[]
 }
 
 model Subscription {
-  id                   String           @id @default(cuid())
-  userId               String           @unique
-  plan                 String
-  status               String
-  startDate            DateTime         @default(now())
-  endDate              DateTime?
-  minutesAllowed       Int
-  minutesUsed          Int              @default(0)
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
-  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscriptionPlan     SubscriptionPlan? @relation(fields: [planId], references: [id])
-  planId               String?
+  id                     String            @id @default(cuid())
+  userId                 String            @unique
+  plan                   String
+  status                 String
+  startDate              DateTime          @default(now())
+  endDate                DateTime?
+  minutesAllowed         Int
+  minutesUsed            Int               @default(0)
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  planId                 String?
+  stripeCurrentPeriodEnd DateTime?
+  stripePriceId          String?
+  subscriptionPlan       SubscriptionPlan? @relation(fields: [planId], references: [id])
+  user                   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SubscriptionPlan {
-  id              String         @id @default(cuid())
-  name            String
-  description     String
-  monthlyPrice    Float
-  yearlyPrice     Float
-  features        String[]
-  minutesAllowed  Int
-  maxFileSize     Int            // In MB
-  maxConcurrentRequests Int      // Number of simultaneous requests allowed
-  storageDuration Int            // In days
-  isActive        Boolean        @default(true)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  subscriptions   Subscription[]
+  id                    String         @id @default(cuid())
+  name                  String
+  description           String
+  monthlyPrice          Float
+  yearlyPrice           Float
+  features              String[]
+  minutesAllowed        Int
+  maxFileSize           Int
+  maxConcurrentRequests Int
+  storageDuration       Int
+  isActive              Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  stripePriceId         String?
+  subscriptions         Subscription[]
 }
 
 model Video {
@@ -76,19 +79,33 @@ model Video {
 }
 
 model Clip {
-  id            String   @id @default(cuid())
-  videoId       String
-  title         String?
-  url           String
-  startTime     Int
-  endTime       Int
-  createdAt     DateTime @default(now())
-  filePath      String
-  resizedUrl    String?
-  resizedPath   String?
-  subtitlesUrl  String?
-  subtitlesPath String?
-  video         Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  videoId           String
+  title             String?
+  url               String
+  startTime         Float
+  endTime           Float
+  duration          Float
+  reason            String?  // Reason for clip extraction
+  createdAt         DateTime @default(now())
+  externalId        String?  // Id from external API
+  externalCreatedAt DateTime?
+  filename          String
+  withCaptions      Boolean  @default(false)
+  hasSrt            Boolean  @default(false)
+  hasWordTimestamps Boolean  @default(false)
+  
+  // Subtitle information
+  subtitleUrl       String?
+  subtitleId        String?
+  subtitleFormat    String?
+  
+  // Word timestamp information
+  wordTimestampUrl  String?
+  wordTimestampId   String?
+  wordTimestampFormat String?
+  
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
 }
 
 model BrandingSettings {
@@ -105,4 +122,57 @@ model BrandingSettings {
   createdAt    DateTime @default(now())
 }
 
+model AppSettings {
+  id                    String   @id @default(cuid())
+  // General settings
+  userRegistration      Boolean  @default(true)
+  maxUploadSize         Int      @default(500) // In MB
+  defaultVideoQuality   String   @default("720p")
+  defaultLanguage       String   @default("en")
+  enableEmailNotifications Boolean @default(true)
+  maintenanceMode       Boolean  @default(false)
+  
+  // Email settings
+  fromEmail             String   @default("noreply@reelscreator.com")
+  smtpHost              String?
+  smtpPort              String?
+  smtpUsername          String?
+  smtpPassword          String?
+  enableSMTP            Boolean  @default(false)
+  
+  // Subscription settings
+  trialPeriod           Int      @default(14) // In days
+  defaultPlan           String   @default("basic")
+  enableRecurring       Boolean  @default(true)
+  gracePeriod           Int      @default(3) // In days
+  allowCancellation     Boolean  @default(true)
+  
+  // Stripe settings
+  stripePublishableKey  String?
+  stripeSecretKey       String?
+  stripeWebhookSecret   String?
+  stripeLiveMode        Boolean  @default(false)
+  
+  // Privacy settings
+  privacyPolicy         String?  @db.Text
+  termsOfService        String?  @db.Text
+  cookiePolicy          String?  @db.Text
+  dataRetentionDays     Int      @default(90)
+  allowDataExport       Boolean  @default(true)
+  
+  // Storage settings
+  storageProvider       String   @default("local")
+  s3BucketName          String?
+  s3AccessKey           String?
+  s3SecretKey           String?
+  s3Region              String?
+  maxStorageGB          Int      @default(50)
+  
+  updatedAt             DateTime @updatedAt
+  createdAt             DateTime @default(now())
+}
 
+enum Role {
+  USER
+  ADMIN
+}

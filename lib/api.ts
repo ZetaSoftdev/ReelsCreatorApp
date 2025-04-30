@@ -3,7 +3,7 @@
  */
 
 // API endpoint from environment variables
-const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://reels-creator-alb-555953912.us-west-1.elb.amazonaws.com/api/v1';
+const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'https://api.editur.ai/api/v1';
 
 // Helper function to ensure URLs are properly formatted with the API endpoint
 const formatApiUrl = (url: string): string => {
@@ -48,16 +48,55 @@ export async function createVideoProcessingJob(
 }
 
 /**
+ * Save video info to database after upload
+ * This function should be called after successful video upload
+ * @param userId - User ID
+ * @param file - The uploaded video file
+ * @param jobId - Job ID returned from the API
+ * @param exactDuration - Exact video duration in seconds (if available)
+ * @returns Response with the created video record
+ */
+export async function saveVideoToDatabase(
+  userId: string,
+  file: File,
+  jobId: string,
+  exactDuration?: number
+): Promise<Response> {
+  // Use exact duration if provided, otherwise estimate based on file size
+  const duration = exactDuration !== undefined 
+    ? exactDuration 
+    : Math.round(file.size / (1024 * 1024) * 10); // ~10 seconds per MB
+  
+  const videoData = {
+    userId: userId,
+    title: file.name,
+    description: `Uploaded on ${new Date().toLocaleDateString()}`,
+    originalUrl: `${API_ENDPOINT}/jobs/${jobId}/video`,
+    duration: duration,
+    fileSize: file.size,
+    status: 'processing',
+    uploadPath: `/uploads/${jobId}/${file.name}`
+  };
+  
+  return fetch('/api/videos', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(videoData)
+  });
+}
+
+/**
  * Get the status of a job
  * @param jobId - The job ID to check
  * @returns The API response with job status
  */
 export async function getJobStatus(jobId: string): Promise<Response> {
-  return fetch(`${API_ENDPOINT}/jobs/${jobId}`, {
+  return fetch(`/api/jobs/status/${jobId}`, {
     method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': 'test-key-123'
+      'Content-Type': 'application/json'
     }
   });
 }
@@ -129,4 +168,26 @@ export function getWordTimestampsUrl(filename: string): string {
     return formatApiUrl(filename);
   }
   return formatApiUrl(`word-timestamps/${encodeURIComponent(filename)}`);
+}
+
+/**
+ * Save processed clips to database
+ * @param videoId - The parent video ID in our database
+ * @param clips - Array of processed clips with video, subtitle, and word timestamp results
+ * @returns Response from the API
+ */
+export async function saveClipsToDatabase(
+  videoId: string,
+  clips: any[]
+): Promise<Response> {
+  return fetch('/api/clips', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      videoId,
+      clips
+    })
+  });
 }
