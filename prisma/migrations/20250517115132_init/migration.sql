@@ -1,14 +1,29 @@
 -- CreateEnum
-CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'role') THEN
+        CREATE TYPE "Role" AS ENUM ('USER', 'ADMIN');
+    END IF;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "SocialPlatform" AS ENUM ('YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'socialplatform') THEN
+        CREATE TYPE "SocialPlatform" AS ENUM ('YOUTUBE', 'TIKTOK', 'INSTAGRAM', 'FACEBOOK', 'TWITTER');
+    END IF;
+END $$;
 
 -- CreateEnum
-CREATE TYPE "PostStatus" AS ENUM ('SCHEDULED', 'PROCESSING', 'PUBLISHED', 'FAILED', 'DRAFT');
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'poststatus') THEN
+        CREATE TYPE "PostStatus" AS ENUM ('SCHEDULED', 'PROCESSING', 'PUBLISHED', 'FAILED', 'DRAFT');
+    END IF;
+END $$;
 
 -- CreateTable
-CREATE TABLE "User" (
+CREATE TABLE IF NOT EXISTS "User" (
     "id" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "name" TEXT,
@@ -27,7 +42,7 @@ CREATE TABLE "User" (
 );
 
 -- CreateTable
-CREATE TABLE "Subscription" (
+CREATE TABLE IF NOT EXISTS "Subscription" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "plan" TEXT NOT NULL,
@@ -46,7 +61,7 @@ CREATE TABLE "Subscription" (
 );
 
 -- CreateTable
-CREATE TABLE "SubscriptionPlan" (
+CREATE TABLE IF NOT EXISTS "SubscriptionPlan" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -66,7 +81,7 @@ CREATE TABLE "SubscriptionPlan" (
 );
 
 -- CreateTable
-CREATE TABLE "Video" (
+CREATE TABLE IF NOT EXISTS "Video" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -86,7 +101,7 @@ CREATE TABLE "Video" (
 );
 
 -- CreateTable
-CREATE TABLE "Clip" (
+CREATE TABLE IF NOT EXISTS "Clip" (
     "id" TEXT NOT NULL,
     "videoId" TEXT NOT NULL,
     "title" TEXT,
@@ -113,7 +128,7 @@ CREATE TABLE "Clip" (
 );
 
 -- CreateTable
-CREATE TABLE "EditedVideo" (
+CREATE TABLE IF NOT EXISTS "EditedVideo" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -129,7 +144,7 @@ CREATE TABLE "EditedVideo" (
 );
 
 -- CreateTable
-CREATE TABLE "BrandingSettings" (
+CREATE TABLE IF NOT EXISTS "BrandingSettings" (
     "id" TEXT NOT NULL,
     "siteName" TEXT NOT NULL DEFAULT 'Reels Creator',
     "logoUrl" TEXT,
@@ -146,7 +161,7 @@ CREATE TABLE "BrandingSettings" (
 );
 
 -- CreateTable
-CREATE TABLE "AppSettings" (
+CREATE TABLE IF NOT EXISTS "AppSettings" (
     "id" TEXT NOT NULL,
     "userRegistration" BOOLEAN NOT NULL DEFAULT true,
     "maxUploadSize" INTEGER NOT NULL DEFAULT 500,
@@ -197,7 +212,7 @@ CREATE TABLE "AppSettings" (
 );
 
 -- CreateTable
-CREATE TABLE "SocialMediaAccount" (
+CREATE TABLE IF NOT EXISTS "SocialMediaAccount" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "platform" "SocialPlatform" NOT NULL,
@@ -213,7 +228,7 @@ CREATE TABLE "SocialMediaAccount" (
 );
 
 -- CreateTable
-CREATE TABLE "ScheduledPost" (
+CREATE TABLE IF NOT EXISTS "ScheduledPost" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "socialAccountId" TEXT NOT NULL,
@@ -232,55 +247,137 @@ CREATE TABLE "ScheduledPost" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'User_email_key') THEN
+        CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
+    END IF;
+END $$;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Subscription_userId_key" ON "Subscription"("userId");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'Subscription_userId_key') THEN
+        CREATE UNIQUE INDEX "Subscription_userId_key" ON "Subscription"("userId");
+    END IF;
+END $$;
 
 -- CreateIndex
-CREATE INDEX "EditedVideo_userId_idx" ON "EditedVideo"("userId");
-
-
-
-
--- CreateIndex
-CREATE INDEX "SocialMediaAccount_userId_idx" ON "SocialMediaAccount"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "SocialMediaAccount_userId_platform_accountName_key" ON "SocialMediaAccount"("userId", "platform", "accountName");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'EditedVideo_userId_idx') THEN
+        CREATE INDEX "EditedVideo_userId_idx" ON "EditedVideo"("userId");
+    END IF;
+END $$;
 
 -- CreateIndex
-CREATE INDEX "ScheduledPost_userId_idx" ON "ScheduledPost"("userId");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'SocialMediaAccount_userId_idx') THEN
+        CREATE INDEX "SocialMediaAccount_userId_idx" ON "SocialMediaAccount"("userId");
+    END IF;
+END $$;
 
 -- CreateIndex
-CREATE INDEX "ScheduledPost_scheduledFor_idx" ON "ScheduledPost"("scheduledFor");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'SocialMediaAccount_userId_platform_accountName_key') THEN
+        CREATE UNIQUE INDEX "SocialMediaAccount_userId_platform_accountName_key" ON "SocialMediaAccount"("userId", "platform", "accountName");
+    END IF;
+END $$;
 
 -- CreateIndex
-CREATE INDEX "ScheduledPost_status_idx" ON "ScheduledPost"("status");
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_userId_idx') THEN
+        CREATE INDEX "ScheduledPost_userId_idx" ON "ScheduledPost"("userId");
+    END IF;
+END $$;
+
+-- CreateIndex
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_scheduledFor_idx') THEN
+        CREATE INDEX "ScheduledPost_scheduledFor_idx" ON "ScheduledPost"("scheduledFor");
+    END IF;
+END $$;
+
+-- CreateIndex
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_status_idx') THEN
+        CREATE INDEX "ScheduledPost_status_idx" ON "ScheduledPost"("status");
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Subscription_planId_fkey') THEN
+        ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_planId_fkey" FOREIGN KEY ("planId") REFERENCES "SubscriptionPlan"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Subscription_userId_fkey') THEN
+        ALTER TABLE "Subscription" ADD CONSTRAINT "Subscription_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Video" ADD CONSTRAINT "Video_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Video_userId_fkey') THEN
+        ALTER TABLE "Video" ADD CONSTRAINT "Video_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "Clip" ADD CONSTRAINT "Clip_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "Video"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Clip_videoId_fkey') THEN
+        ALTER TABLE "Clip" ADD CONSTRAINT "Clip_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "Video"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "EditedVideo" ADD CONSTRAINT "EditedVideo_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'EditedVideo_userId_fkey') THEN
+        ALTER TABLE "EditedVideo" ADD CONSTRAINT "EditedVideo_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "SocialMediaAccount" ADD CONSTRAINT "SocialMediaAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SocialMediaAccount_userId_fkey') THEN
+        ALTER TABLE "SocialMediaAccount" ADD CONSTRAINT "SocialMediaAccount_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ScheduledPost_userId_fkey') THEN
+        ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_socialAccountId_fkey" FOREIGN KEY ("socialAccountId") REFERENCES "SocialMediaAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ScheduledPost_socialAccountId_fkey') THEN
+        ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_socialAccountId_fkey" FOREIGN KEY ("socialAccountId") REFERENCES "SocialMediaAccount"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "EditedVideo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ScheduledPost_videoId_fkey') THEN
+        ALTER TABLE "ScheduledPost" ADD CONSTRAINT "ScheduledPost_videoId_fkey" FOREIGN KEY ("videoId") REFERENCES "EditedVideo"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
