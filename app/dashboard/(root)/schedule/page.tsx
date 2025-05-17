@@ -1,194 +1,285 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import HomeHeader from "@/components/HomeHeader";
-import { Calendar, Clock, Edit, Plus, Trash2, Video } from "lucide-react";
-import { useSession } from "next-auth/react";
-import { redirect, useRouter } from "next/navigation";
-import { toast } from "@/hooks/use-toast";
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import HomeHeader from '@/components/HomeHeader';
+import { ChevronLeft, ChevronRight, Calendar, Search } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+import { MdPublish } from 'react-icons/md';
+import PublishModal from '@/components/social/PublishModal';
+import ScheduleModal from '@/components/social/ScheduleModal';
 
-interface ScheduledVideo {
+// Define types for our data
+interface EditedVideo {
   id: string;
   title: string;
-  platform: string;
-  scheduledFor: Date;
-  thumbnail: string;
-  status: 'scheduled' | 'published' | 'failed';
+  filePath: string;
+  duration: number;
+  fileSize: number;
+  editedAt: string;
+}
+
+interface PaginationData {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export default function SchedulePage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
-  const [scheduledVideos, setScheduledVideos] = useState<ScheduledVideo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editedVideos, setEditedVideos] = useState<EditedVideo[]>([]);
+  const [pagination, setPagination] = useState<PaginationData>({
+    total: 0,
+    page: 1,
+    limit: 6,
+    totalPages: 0
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // State for publish modal
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<EditedVideo | null>(null);
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login");
-    }
-  }, [status, router]);
+  // Function to fetch edited videos
+  const fetchEditedVideos = async (page = 1, search = '') => {
+    try {
+      setIsLoading(true);
 
-  // Mock data for scheduled videos
-  useEffect(() => {
-    // This would normally be an API call to fetch scheduled videos
-    const mockData: ScheduledVideo[] = [
-      {
-        id: "1",
-        title: "Top 10 Travel Tips for Europe",
-        platform: "YouTube",
-        scheduledFor: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-        thumbnail: "https://images.unsplash.com/photo-1519677100203-a0e668c92439?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        status: "scheduled"
-      },
-      {
-        id: "2",
-        title: "5-Minute Workout for Busy People",
-        platform: "Instagram",
-        scheduledFor: new Date(Date.now() + 4 * 24 * 60 * 60 * 1000), // 4 days from now
-        thumbnail: "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        status: "scheduled"
-      },
-      {
-        id: "3",
-        title: "Easy Dinner Recipes for Beginners",
-        platform: "TikTok",
-        scheduledFor: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-        thumbnail: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80",
-        status: "published"
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: pagination.limit.toString()
+      });
+
+      if (search) {
+        params.append('search', search);
       }
-    ];
-    
-    setScheduledVideos(mockData);
-    setIsLoading(false);
-  }, []);
 
-  const handleDeleteSchedule = (id: string) => {
-    // Mock deletion
-    setScheduledVideos(prev => prev.filter(video => video.id !== id));
-    toast({
-      title: "Video unscheduled",
-      description: "The video has been removed from the schedule.",
-    });
+      const response = await fetch(`/api/videos/edited?${params}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch edited videos: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setEditedVideos(data.editedVideos || []);
+      setPagination(data.pagination);
+
+    } catch (error) {
+      console.error('Error fetching edited videos:', error);
+      toast({
+        title: "Error Loading Videos",
+        description: "Failed to load your edited videos",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleEditSchedule = (id: string) => {
-    // This would navigate to an edit page
-    toast({
-      title: "Coming soon",
-      description: "Edit functionality will be available soon.",
-    });
+  // Fetch videos on initial load
+  useEffect(() => {
+    fetchEditedVideos(pagination.page, searchTerm);
+  }, [pagination.page]);
+
+  // Handle search
+  const handleSearch = () => {
+    fetchEditedVideos(1, searchTerm);
   };
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(date);
+  // Function to format duration (seconds to MM:SS)
+  const formatDuration = (durationInSeconds: number) => {
+    const minutes = Math.floor(durationInSeconds / 60);
+    const seconds = Math.floor(durationInSeconds % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Display loading state or redirect if not authenticated
-  if (status === "loading" || isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
+  // Pagination functions
+  const goToNextPage = () => {
+    if (pagination.page < pagination.totalPages) {
+      setPagination(prev => ({ ...prev, page: prev.page + 1 }));
+    }
+  };
 
-  if (status === "unauthenticated") {
-    return null; // useEffect will handle redirect
-  }
+  const goToPreviousPage = () => {
+    if (pagination.page > 1) {
+      setPagination(prev => ({ ...prev, page: prev.page - 1 }));
+    }
+  };
+  
+  // Handle opening the publish modal
+  const handleOpenPublishModal = (video: EditedVideo) => {
+    setSelectedVideo(video);
+    setPublishModalOpen(true);
+  };
+  
+  // Handle opening the schedule modal
+  const handleOpenScheduleModal = (video: EditedVideo) => {
+    setSelectedVideo(video);
+    setScheduleModalOpen(true);
+  };
+  
+  // Handle closing the publish modal
+  const handleClosePublishModal = () => {
+    setPublishModalOpen(false);
+    setSelectedVideo(null);
+  };
+  
+  // Handle closing the schedule modal
+  const handleCloseScheduleModal = () => {
+    setScheduleModalOpen(false);
+    setSelectedVideo(null);
+  };
+  
+  // Handle successful publishing or scheduling
+  const handleActionComplete = (success: boolean) => {
+    if (success) {
+      // Optionally refresh the video list
+      fetchEditedVideos(pagination.page, searchTerm);
+    }
+  };
 
   return (
     <>
-      <HomeHeader pageName="Schedule" />
-      <div className="p-6 w-full flex justify-center items-center h-screen mx-auto">
-        <p>Coming soon...</p>
-      </div>
+      <HomeHeader pageName="Schedule & Publish" />
+      <div className="p-6">
+        <div className="mx-auto">
+          <h2 className="text-4xl font-medium mb-4">Choose a short to Post</h2>
 
-      {/* <div className="p-6 max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Video Schedule</h1>
-          <button className="inline-flex items-center bg-[#1a1a1a] text-white px-3 py-1 rounded-full hover:bg-[#343434] transition-colors">
-            <Plus size={20} className="mr-1" />
-            <span className="whitespace-nowrap">New Schedule</span>
-          </button>
-        </div>
-        
-        {scheduledVideos.length === 0 ? (
-          <div className="text-center py-20 bg-lightGray rounded-lg border border-gray-200">
-            <Video className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No scheduled videos</h3>
-            <p className="mt-1 text-sm text-gray-500">Get started by scheduling your first video.</p>
-            <div className="mt-6">
-              <button className="inline-flex items-center bg-[#1a1a1a] px-3 py-1 text-sm font-medium text-white hover:bg-[#343434] rounded-full transition-colors">
-                <Plus className="mr-1 h-5 w-5" aria-hidden="true" />
-                <span>Schedule a Video</span>
-              </button>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="relative flex-1">
+              <Search size={20} className="absolute top-3 left-3 text-gray-500" />
+              <Input
+                placeholder="Search shorts by name"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 focus-visible:border-yellow border-gray-400 transition-shadow py-6 text-lg"
+                type="text"
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              />
             </div>
+            <Button
+              onClick={handleSearch}
+              className="bg-purple-600 hover:bg-purple-700 text-white py-6 px-6"
+            >
+              Search
+            </Button>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {scheduledVideos.map((video) => (
-              <div 
-                key={video.id} 
-                className="bg-white rounded-lg overflow-hidden shadow-md border border-gray-200 hover:shadow-lg transition-all"
-              >
-                <div className="relative h-40 bg-gray-200">
-                  <img 
-                    src={video.thumbnail} 
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded-full text-xs font-medium">
-                    {video.platform}
+
+          {isLoading ? (
+            <div className="flex justify-center items-center mt-20">
+              <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="ml-3 text-gray-700">Loading videos...</p>
+            </div>
+          ) : editedVideos.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
+                {editedVideos.map((video) => (
+                  <div key={video.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <div className="relative">
+                      {/* Video preview */}
+                      <div className="relative aspect-[9/16] bg-black">
+                        <video
+                          className="w-full h-full object-cover"
+                          controls
+                          src={video.filePath}
+                        />
+                      </div>
+
+                      {/* Duration badge */}
+                      <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                        {formatDuration(video.duration)}
+                      </div>
+                    </div>
+
+                    <div className="p-3">
+                      <h3 className="font-medium text-gray-800 line-clamp-1">{video.title}</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Edited on {new Date(video.editedAt).toLocaleString()}
+                      </p>
+
+                      <div className="flex justify-between items-center mt-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 text-xs p-1"
+                          onClick={() => handleOpenScheduleModal(video)}
+                        >
+                          <Calendar size={14} />
+                          Schedule
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 text-xs p-1"
+                          onClick={() => handleOpenPublishModal(video)}
+                        >
+                          <MdPublish size={14} />
+                          Publish
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <div className={`absolute bottom-2 left-2 px-2 py-1 rounded-full text-xs font-medium ${
-                    video.status === 'published' ? 'bg-green-100 text-green-800' : 
-                    video.status === 'failed' ? 'bg-red-100 text-red-800' : 
-                    video.status === 'scheduled' ? 'bg-green-300 text-yellow-800' : ''
-                  }`}>
-                    {video.status.charAt(0).toUpperCase() + video.status.slice(1)}
-                  </div>
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-lg mb-2 line-clamp-1">{video.title}</h3>
-                  
-                  <div className="flex items-center text-gray-500 mb-3">
-                    <Calendar size={16} className="mr-1" />
-                    <span className="text-sm">{formatDate(video.scheduledFor)}</span>
-                  </div>
-                  
-                  <div className="flex justify-end space-x-2 mt-4">
-                    <button 
-                      onClick={() => handleEditSchedule(video.id)}
-                      className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteSchedule(video.id)}
-                      className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
-        
-        <div className="mt-10 bg-gradient-to-r from-purple-500 to-blue-500 p-8 rounded-lg text-white">
-          <h2 className="text-2xl font-bold mb-4">Maximize Your Reach</h2>
-          <p className="mb-6">
-            Schedule your videos to be published at optimal times across multiple platforms to reach your audience when they're most active.
-          </p>
-          <button className="bg-white text-purple-600 hover:bg-gray-100 transition-colors px-6 py-2 rounded-full font-medium">
-            Learn More
-          </button>
+
+              {/* Pagination Controls */}
+              {pagination.totalPages > 1 && (
+                <div className="flex justify-center items-center mt-8 gap-4">
+                  <button
+                    onClick={goToPreviousPage}
+                    disabled={pagination.page === 1}
+                    className={`p-2 rounded-md border ${pagination.page === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+
+                  <span className="text-sm font-medium">{pagination.page} of {pagination.totalPages}</span>
+
+                  <button
+                    onClick={goToNextPage}
+                    disabled={pagination.page === pagination.totalPages}
+                    className={`p-2 rounded-md border ${pagination.page === pagination.totalPages ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+
+                  <span className="text-sm text-gray-500">Videos per page: <span className="font-medium">{pagination.limit}</span></span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center text-gray-500 text-lg mt-40 font-medium">
+              No shorts available to Post
+            </div>
+          )}
         </div>
-      </div> */}
+      </div>
+      
+      {/* Publish Modal */}
+      {selectedVideo && (
+        <>
+          <PublishModal 
+            isOpen={publishModalOpen}
+            onClose={handleClosePublishModal}
+            videoId={selectedVideo.id}
+            videoTitle={selectedVideo.title}
+            onPublish={handleActionComplete}
+          />
+          
+          <ScheduleModal
+            isOpen={scheduleModalOpen}
+            onClose={handleCloseScheduleModal}
+            videoId={selectedVideo.id}
+            videoTitle={selectedVideo.title}
+            onSchedule={handleActionComplete}
+          />
+        </>
+      )}
     </>
   );
-} 
+}

@@ -4,8 +4,8 @@
 
 - [x] Fix subscription success page redirect issue
 - [x] Fix database schema mismatch for Clip model
-- [ ] Test subscription flow end-to-end to ensure it's working properly
-- [ ] Monitor Stripe webhook logs for any errors
+- [x] Test subscription flow end-to-end to ensure it's working properly
+- [x] Monitor Stripe webhook logs for any errors
 
 
 ## Upcoming Tasks
@@ -14,13 +14,13 @@
 ### IMPORTANT
 
 #### Autocaptioning  
-- [ ] Enable the user to edit Text in the timeline editor 
-- [ ] Fix the scheduling tab  
-- [ ] Enable the user to edit Text in the timeline editor 
+- [x] Enable the user to edit Text in the timeline editor 
+- [x] Fix the scheduling tab  
+- [x] Enable the user to edit Text in the timeline editor 
 
 #### Scheduling
 - [ ] Properly create the scheduling page using the exisitng style guidlines
-- [ ] It should have scheduling feature for Tiktok, Facebook, Youtube and instagram. First you have to create a mechanism for how it will forward the selected video to the given platforms while keeping in mind that all shorts are stored in AWS where we have our API deployed and links of that shorts are stored in our postgre database. You must discuss the implementation with me for example do we need to download it to railway and then forward that video or we can simply forward the aws link. Which approach will be better, discuss with me and i will tell you then how to proceed
+- [x] It should have scheduling feature for Tiktok, Facebook, Youtube and instagram. First you have to create a mechanism for how it will forward the selected video to the given platforms while keeping in mind that all shorts are stored in AWS where we have our API deployed and links of that shorts are stored in our postgre database. You must discuss the implementation with me for example do we need to download it to railway and then forward that video or we can simply forward the aws link. Which approach will be better, discuss with me and i will tell you then how to proceed
 
 
 ### User Experience
@@ -28,10 +28,11 @@
 - [ ] Create user onboarding tutorial/walkthrough
 - [ ] Add keyboard shortcuts for common editing actions
 - [ ] Create a more intuitive timeline editor
+- [x] Display toast notifications properly for user feedback
+- [x] Add social media dashboard with published videos visibility
 
 ### Video Editing
-- [ ] Add text overlay capabilities with customizable fonts and animations
-- [ ] Implement transition effects between clips (fade, dissolve, wipe, etc.)
+- [x] Add text overlay capabilities with customizable fonts and animations
 - [ ] Add background music library and audio mixing
 - [ ] Implement basic color correction tools
 - [ ] Add video filters and effects
@@ -55,11 +56,19 @@
 - [ ] Set up automated testing for critical paths
 
 ### Subscription & Monetization
-- [ ] Add usage analytics dashboard for subscribers
+- [x] Add usage analytics dashboard for subscribers
 - [ ] Implement referral program for subscription discounts
 - [ ] Create team/organization subscription tiers
 - [ ] Add pay-per-export option for non-subscribers
 - [ ] Implement subscription plan comparison page
+
+### Social Media Integration
+- [x] Implement YouTube direct publishing
+- [x] Implement TikTok direct publishing
+- [ ] Implement Instagram direct publishing
+- [ ] Implement Facebook direct publishing
+- [ ] Implement Twitter direct publishing
+- [ ] Add social performance analytics dashboard
 
 ### Performance & Optimization
 - [ ] Optimize clip loading and playback performance
@@ -81,7 +90,7 @@
 
 - [ ] Mobile app version
 - [ ] Advanced collaboration features
-- [ ] Integration with major social media platforms for direct publishing
+- [x] Integration with major social media platforms for direct publishing
 - [ ] White-label solution for businesses
 - [ ] AI-powered content recommendation engine
 

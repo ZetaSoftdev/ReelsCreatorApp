@@ -80,6 +80,22 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
     return { segments: activeSegments, activeWordIndices };
   };
 
+  // Helper function to draw a rounded rectangle if the built-in roundRect isn't available
+  const drawRoundedRect = (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+  };
+
   // Render captions on canvas
   const renderCaptions = () => {
     if (!canvasRef.current || !videoRef.current || !wordTimestamps?.segments) return;
@@ -105,8 +121,11 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
     const baseScaleFactor = 0.4;
     const previewScaleFactor = baseScaleFactor * (videoWidth <= referenceWidth ? 1 : videoWidth / referenceWidth);
     
+    // Apply global scaling if defined in preset, otherwise default to 1.0
+    const globalScale = preset.scale || 1.0;
+    
     // Apply scaling to font size
-    const scaledFontSize = preset.fontSize * previewScaleFactor;
+    const scaledFontSize = preset.fontSize * previewScaleFactor * globalScale;
     
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -150,6 +169,9 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
     
     // Apply font and style based on preset (with scaled font size)
     ctx.font = `${preset.fontWeight} ${scaledFontSize}px ${preset.fontFamily}`;
+    
+    // Set letter spacing if specified (using textLetterSpacing if available in future canvas APIs)
+    // Currently we handle letter spacing manually when drawing text
     
     // Set text alignment
     if (preset.alignment === 'left') {
@@ -269,6 +291,30 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
           textHeight + (preset.padding || 10)
         );
       }
+      // Add a fallback to use bgColor and bgOpacity if backgroundColor is not set
+      else if (preset.bgColor && preset.bgColor !== 'transparent') {
+        const lineMetrics = ctx.measureText(line);
+        const lineWidth = lineMetrics.width;
+        const textHeight = scaledFontSize;
+        
+        const bgX = ctx.textAlign === 'left' ? xPosition - (preset.padding || 10) :
+                  ctx.textAlign === 'right' ? xPosition - lineWidth - (preset.padding || 10) :
+                  xPosition - (lineWidth / 2) - (preset.padding || 10);
+        
+        // Convert bgColor and bgOpacity to an rgba string
+        const r = parseInt(preset.bgColor.substring(1, 3), 16);
+        const g = parseInt(preset.bgColor.substring(3, 5), 16);
+        const b = parseInt(preset.bgColor.substring(5, 7), 16);
+        const a = preset.bgOpacity !== undefined ? preset.bgOpacity : 1;
+        
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+        ctx.fillRect(
+          bgX,
+          yPosition - textHeight,
+          lineWidth + ((preset.padding || 10) * 2),
+          textHeight + (preset.padding || 6)
+        );
+      }
       
       // Draw each word in the line
       const lineWords = line.split(' ');
@@ -292,6 +338,70 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
         lineWords.forEach((word, wordIndex) => {
           const isActive = hasActiveWords && lineIndex === 0 && activeWordIndices.includes(wordIndex);
           
+          // Get the word width for the background
+          const wordWidth = ctx.measureText(word).width;
+          const padding = preset.padding ? Math.min(preset.padding, 3) : 2; // Reduced padding for word-level background
+          const textHeight = scaledFontSize;
+          
+          // Draw background for highlighted word if enabled and active
+          if (isActive && animationEnabled && preset.highlightBgColor && preset.highlightBgColor !== 'transparent') {
+            // Background highlighting is disabled for now
+            /* 
+            // Save current context
+            ctx.save();
+            
+            // Calculate the background position and dimensions
+            const wordBgX = currentX - padding;
+            
+            // Properly handle word background positioning with font metrics
+            // Similar fixes to the line background positioning
+            const fontAscent = textHeight * 0.75; // Approximate ascent (height above baseline)
+            const fontDescent = textHeight * 0.25; // Approximate descent (height below baseline)
+            const wordBgY = yPosition - fontAscent - padding;
+            const wordBgHeight = fontAscent + fontDescent + (padding * 2);
+            
+            // Convert highlight background color and opacity to fill style
+            if (preset.highlightBgColor.startsWith('#')) {
+              const r = parseInt(preset.highlightBgColor.substring(1, 3), 16);
+              const g = parseInt(preset.highlightBgColor.substring(3, 5), 16);
+              const b = parseInt(preset.highlightBgColor.substring(5, 7), 16);
+              const a = preset.highlightBgOpacity !== undefined ? preset.highlightBgOpacity : 1;
+              
+              ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            } else {
+              ctx.fillStyle = preset.highlightBgColor;
+            }
+            
+            // Draw the word background with more rounded corners
+            // Increase border radius for a more rounded appearance
+            const borderRadius = Math.min(8, textHeight * 0.4); // Increased from 4 to 8 and 0.2 to 0.4
+            
+            // Try to use the built-in roundRect if available, otherwise use our helper
+            if (typeof ctx.roundRect === 'function') {
+              ctx.roundRect(
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+              ctx.fill();
+            } else {
+              drawRoundedRect(
+                ctx,
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+            }
+            
+            // Restore context for text drawing
+            ctx.restore();
+            */
+          }
+          
           // Set color based on whether the word is active
           ctx.fillStyle = isActive && animationEnabled ? 
             (preset.highlightColor || '#FFFF00') : 
@@ -301,6 +411,21 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
           if (isActive && animationEnabled) {
             // Save context for animation
             ctx.save();
+            
+            // Apply scaling for highlighted words when highlightScale is set
+            if (preset.highlightScale && preset.highlightScale > 1.0) {
+              const scaleValue = preset.highlightScale;
+              
+              // Calculate the center position of the word for scaling
+              const wordWidth = ctx.measureText(word).width;
+              const wordCenterX = currentX + wordWidth / 2;
+              const wordCenterY = yPosition;
+              
+              // Apply scaling transformation
+              ctx.translate(wordCenterX, wordCenterY);
+              ctx.scale(scaleValue, scaleValue);
+              ctx.translate(-wordCenterX, -wordCenterY);
+            }
             
             // Apply animation effect
             switch (preset.animation || preset.animationType) {
@@ -326,36 +451,86 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
                 ctx.restore();
                 
                 // Move X position forward for next word and skip the rest of this iteration
-                currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+                currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
                 return;
             }
             
             // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+            } else {
+              // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
             
             // Restore context after animation
             ctx.restore();
           } else {
+            // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+          } else {
             // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
           }
           
           // Move X position forward for next word
-          currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+          currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
         });
         
         // Reset text alignment to original
@@ -369,6 +544,70 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
         lineWords.forEach((word, wordIndex) => {
           const isActive = hasActiveWords && lineIndex === 0 && activeWordIndices.includes(wordIndex);
           
+          // Get the word width for the background
+          const wordWidth = ctx.measureText(word).width;
+          const padding = preset.padding ? Math.min(preset.padding, 3) : 2; // Reduced padding for word-level background
+          const textHeight = scaledFontSize;
+          
+          // Draw background for highlighted word if enabled and active
+          if (isActive && animationEnabled && preset.highlightBgColor && preset.highlightBgColor !== 'transparent') {
+            // Background highlighting is disabled for now
+            /* 
+            // Save current context
+            ctx.save();
+            
+            // Calculate the background position and dimensions
+            const wordBgX = currentX - padding;
+            
+            // Properly handle word background positioning with font metrics
+            // Similar fixes to the line background positioning
+            const fontAscent = textHeight * 0.75; // Approximate ascent (height above baseline)
+            const fontDescent = textHeight * 0.25; // Approximate descent (height below baseline)
+            const wordBgY = yPosition - fontAscent - padding;
+            const wordBgHeight = fontAscent + fontDescent + (padding * 2);
+            
+            // Convert highlight background color and opacity to fill style
+            if (preset.highlightBgColor.startsWith('#')) {
+              const r = parseInt(preset.highlightBgColor.substring(1, 3), 16);
+              const g = parseInt(preset.highlightBgColor.substring(3, 5), 16);
+              const b = parseInt(preset.highlightBgColor.substring(5, 7), 16);
+              const a = preset.highlightBgOpacity !== undefined ? preset.highlightBgOpacity : 1;
+              
+              ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            } else {
+              ctx.fillStyle = preset.highlightBgColor;
+            }
+            
+            // Draw the word background with more rounded corners
+            // Increase border radius for a more rounded appearance
+            const borderRadius = Math.min(8, textHeight * 0.4); // Increased from 4 to 8 and 0.2 to 0.4
+            
+            // Try to use the built-in roundRect if available, otherwise use our helper
+            if (typeof ctx.roundRect === 'function') {
+              ctx.roundRect(
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+              ctx.fill();
+            } else {
+              drawRoundedRect(
+                ctx,
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+            }
+            
+            // Restore context for text drawing
+            ctx.restore();
+            */
+          }
+          
           // Set color based on whether the word is active
           ctx.fillStyle = isActive && animationEnabled ? 
             (preset.highlightColor || '#FFFF00') : 
@@ -378,6 +617,21 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
           if (isActive && animationEnabled) {
             // Save context for animation
             ctx.save();
+            
+            // Apply scaling for highlighted words when highlightScale is set
+            if (preset.highlightScale && preset.highlightScale > 1.0) {
+              const scaleValue = preset.highlightScale;
+              
+              // Calculate the center position of the word for scaling
+              const wordWidth = ctx.measureText(word).width;
+              const wordCenterX = currentX + wordWidth / 2;
+              const wordCenterY = yPosition;
+              
+              // Apply scaling transformation
+              ctx.translate(wordCenterX, wordCenterY);
+              ctx.scale(scaleValue, scaleValue);
+              ctx.translate(-wordCenterX, -wordCenterY);
+            }
             
             // Apply animation effect
             switch (preset.animation || preset.animationType) {
@@ -403,36 +657,86 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
                 ctx.restore();
                 
                 // Move X position forward for next word and skip the rest of this iteration
-                currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+                currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
                 return;
             }
             
             // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+            } else {
+              // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
             
             // Restore context after animation
             ctx.restore();
           } else {
+            // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+          } else {
             // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
           }
           
           // Move X position forward for next word
-          currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+          currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
         });
         
         // Reset text alignment
@@ -444,6 +748,70 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
         lineWords.forEach((word, wordIndex) => {
           const isActive = hasActiveWords && lineIndex === 0 && activeWordIndices.includes(wordIndex);
           
+          // Get the word width for the background
+          const wordWidth = ctx.measureText(word).width;
+          const padding = preset.padding ? Math.min(preset.padding, 3) : 2; // Reduced padding for word-level background
+          const textHeight = scaledFontSize;
+          
+          // Draw background for highlighted word if enabled and active
+          if (isActive && animationEnabled && preset.highlightBgColor && preset.highlightBgColor !== 'transparent') {
+            // Background highlighting is disabled for now
+            /* 
+            // Save current context
+            ctx.save();
+            
+            // Calculate the background position and dimensions
+            const wordBgX = currentX - padding;
+            
+            // Properly handle word background positioning with font metrics
+            // Similar fixes to the line background positioning
+            const fontAscent = textHeight * 0.75; // Approximate ascent (height above baseline)
+            const fontDescent = textHeight * 0.25; // Approximate descent (height below baseline)
+            const wordBgY = yPosition - fontAscent - padding;
+            const wordBgHeight = fontAscent + fontDescent + (padding * 2);
+            
+            // Convert highlight background color and opacity to fill style
+            if (preset.highlightBgColor.startsWith('#')) {
+              const r = parseInt(preset.highlightBgColor.substring(1, 3), 16);
+              const g = parseInt(preset.highlightBgColor.substring(3, 5), 16);
+              const b = parseInt(preset.highlightBgColor.substring(5, 7), 16);
+              const a = preset.highlightBgOpacity !== undefined ? preset.highlightBgOpacity : 1;
+              
+              ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+            } else {
+              ctx.fillStyle = preset.highlightBgColor;
+            }
+            
+            // Draw the word background with more rounded corners
+            // Increase border radius for a more rounded appearance
+            const borderRadius = Math.min(8, textHeight * 0.4); // Increased from 4 to 8 and 0.2 to 0.4
+            
+            // Try to use the built-in roundRect if available, otherwise use our helper
+            if (typeof ctx.roundRect === 'function') {
+              ctx.roundRect(
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+              ctx.fill();
+            } else {
+              drawRoundedRect(
+                ctx,
+                wordBgX,
+                wordBgY,
+                wordWidth + (padding * 2),
+                wordBgHeight,
+                borderRadius
+              );
+            }
+            
+            // Restore context for text drawing
+            ctx.restore();
+            */
+          }
+          
           // Set color based on whether the word is active
           ctx.fillStyle = isActive && animationEnabled ? 
             (preset.highlightColor || '#FFFF00') : 
@@ -453,6 +821,21 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
           if (isActive && animationEnabled) {
             // Save context for animation
             ctx.save();
+            
+            // Apply scaling for highlighted words when highlightScale is set
+            if (preset.highlightScale && preset.highlightScale > 1.0) {
+              const scaleValue = preset.highlightScale;
+              
+              // Calculate the center position of the word for scaling
+              const wordWidth = ctx.measureText(word).width;
+              const wordCenterX = currentX + wordWidth / 2;
+              const wordCenterY = yPosition;
+              
+              // Apply scaling transformation
+              ctx.translate(wordCenterX, wordCenterY);
+              ctx.scale(scaleValue, scaleValue);
+              ctx.translate(-wordCenterX, -wordCenterY);
+            }
             
             // Apply animation effect
             switch (preset.animation || preset.animationType) {
@@ -478,36 +861,86 @@ const CaptionRenderer: React.FC<CaptionRendererProps> = ({
                 ctx.restore();
                 
                 // Move X position forward for next word and skip the rest of this iteration
-                currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+                currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
                 return;
             }
             
             // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+            } else {
+              // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
             
             // Restore context after animation
             ctx.restore();
           } else {
+            // Draw the word
+            if (preset.letterSpacing && preset.letterSpacing !== 0) {
+              // Draw character by character with letter spacing
+              let charX = currentX;
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                ctx.fillText(char, charX, yPosition);
+                
+                // Move position by character width plus letter spacing
+                charX += ctx.measureText(char).width + preset.letterSpacing;
+              }
+          } else {
             // Draw the word normally
             ctx.fillText(word, currentX, yPosition);
+            }
             
             // Draw outline if enabled
             if (preset.textOutline) {
               ctx.strokeStyle = preset.outlineColor || '#000000';
               ctx.lineWidth = preset.outlineWidth || 1;
+              
+              if (preset.letterSpacing && preset.letterSpacing !== 0) {
+                // Draw outline character by character with letter spacing
+                let charX = currentX;
+                for (let i = 0; i < word.length; i++) {
+                  const char = word[i];
+                  ctx.strokeText(char, charX, yPosition);
+                  charX += ctx.measureText(char).width + preset.letterSpacing;
+                }
+              } else {
+                // Draw outline normally
               ctx.strokeText(word, currentX, yPosition);
+              }
             }
           }
           
           // Move X position forward for next word
-          currentX += ctx.measureText(word).width + ctx.measureText(' ').width;
+          currentX += ctx.measureText(word).width + ctx.measureText(' ').width + (preset.wordSpacing || 0);
         });
       }
       

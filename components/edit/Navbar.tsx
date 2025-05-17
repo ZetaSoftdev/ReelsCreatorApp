@@ -1,12 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Avatar } from "@/components/ui/avatar";
-import { Crop, Edit, Grid, Languages, Save, User, ChevronLeft, Sparkles, Edit2, Edit3Icon, Captions, Edit3, Download, CheckCircle2 } from "lucide-react";
+import { Crop, Edit, Grid, Languages, Save, User, ChevronLeft, Sparkles, Edit2, Edit3Icon, Captions, Edit3, Download, CheckCircle2, Share } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { CaptionPreset } from "./EditSection";
 import { generateASS } from "@/utils/subtitleUtils";
 import { toast } from "@/hooks/use-toast";
+import { saveEditedVideoToDatabase } from "@/lib/api";
+import { useRouter } from "next/navigation";
 
 // Define export stages for tracking progress
 type ExportStage = 
@@ -23,6 +25,7 @@ interface NavbarProps {
   videoTitle?: string;
   videoSrc?: string;
   wordTimestampsUrl?: string;
+  wordTimestampsData?: any;
   selectedPreset?: CaptionPreset | null;
 }
 
@@ -32,12 +35,25 @@ export default function Navbar({
   videoTitle = "Untitled Video",
   videoSrc,
   wordTimestampsUrl,
+  wordTimestampsData,
   selectedPreset
 }: NavbarProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [isDownloadingSubtitles, setIsDownloadingSubtitles] = useState(false);
   const [exportStage, setExportStage] = useState<ExportStage>("preparing");
   const [exportProgress, setExportProgress] = useState(0);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [savedVideoUrl, setSavedVideoUrl] = useState<string | null>(null);
+  const [savedVideoId, setSavedVideoId] = useState<string | null>(null);
+  const router = useRouter();
+  
+  // Add state for editable title
+  const [editableTitle, setEditableTitle] = useState(videoTitle);
+  
+  // Update editableTitle when videoTitle prop changes
+  useEffect(() => {
+    setEditableTitle(videoTitle);
+  }, [videoTitle]);
   
   // Progress animation for smooth progress bar
   useEffect(() => {
@@ -73,9 +89,9 @@ export default function Navbar({
     return () => clearInterval(interval);
   }, [isExporting, exportStage]);
   
-  // Handle export button click
-  const handleExport = async () => {
-    if (!videoSrc || !wordTimestampsUrl || !selectedPreset) {
+  // Handle save button click
+  const handleSave = async () => {
+    if (!videoSrc || (!wordTimestampsUrl && !wordTimestampsData) || !selectedPreset) {
       toast({
         title: "Missing Requirements",
         description: "Please ensure a video and captions are loaded",
@@ -90,14 +106,25 @@ export default function Navbar({
       setExportProgress(0);
       await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for UI
       
-      // Fetch word timestamps data
+      // Get word timestamps data either from prop or by fetching
       setExportStage("fetchingCaptions");
-      console.log("Fetching word timestamps from:", wordTimestampsUrl);
-      const response = await fetch(decodeURIComponent(wordTimestampsUrl));
-      if (!response.ok) {
-        throw new Error('Failed to fetch word timestamps');
+      let captionsData;
+      
+      if (wordTimestampsData) {
+        // Use already loaded data
+        captionsData = wordTimestampsData;
+      } else if (wordTimestampsUrl) {
+        // Fetch from URL if data not provided
+        console.log("Fetching word timestamps from:", wordTimestampsUrl);
+        const response = await fetch(decodeURIComponent(wordTimestampsUrl));
+        if (!response.ok) {
+          throw new Error('Failed to fetch word timestamps');
+        }
+        captionsData = await response.json();
+      } else {
+        throw new Error('No captions data available');
       }
-      const wordTimestampsData = await response.json();
+      
       await new Promise(resolve => setTimeout(resolve, 500)); // Small delay for UI
       
       // Generate subtitles (preparation)
@@ -114,7 +141,7 @@ export default function Navbar({
         },
         body: JSON.stringify({
           videoUrl: videoSrc,
-          wordTimestamps: wordTimestampsData,
+          wordTimestamps: captionsData,
           preset: selectedPreset,
         }),
       });
@@ -128,26 +155,105 @@ export default function Navbar({
       setExportStage("finalizing");
       const videoBlob = await apiResponse.blob();
       
+      // Create a temporary URL for the video blob to get its duration
+      const blobUrl = URL.createObjectURL(videoBlob);
+      
+      // Get the actual video duration
+      const videoDuration = await getVideoDuration(blobUrl);
+      console.log("Video duration:", videoDuration);
+      
+      // Extract source information from the video URL
+      let sourceType = "video";
+      let sourceId = "";
+      
+      // Try to extract video or clip ID from the source URL
+      const videoUrlObj = new URL(videoSrc, window.location.origin);
+      const videoIdParam = videoUrlObj.searchParams.get("videoId");
+      const clipIdParam = videoUrlObj.searchParams.get("clipId");
+      
+      if (clipIdParam) {
+        sourceType = "clip";
+        sourceId = clipIdParam;
+      } else if (videoIdParam) {
+        sourceType = "video";
+        sourceId = videoIdParam;
+      } else {
+        // Use the full URL as a fallback identifier
+        sourceId = videoSrc;
+      }
+      
+      // Save file to server
+      console.log("Saving video file to server...");
+      const formData = new FormData();
+      formData.append("file", videoBlob, `${editableTitle || "video"}.mp4`);
+      
+      const saveFileResponse = await fetch('/api/videos/edited/save-file', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!saveFileResponse.ok) {
+        const errorData = await saveFileResponse.json();
+        throw new Error(`Failed to save file to server: ${errorData.details || 'Unknown error'}`);
+      }
+      
+      const fileData = await saveFileResponse.json();
+      const serverFilePath = fileData.filePath;
+      console.log("File saved to server at:", serverFilePath);
+      
+      // Save the edited video to the database
+      try {
+        const saveResponse = await saveEditedVideoToDatabase("", {
+          title: editableTitle || "Untitled Video", // Use the editable title
+          sourceType,
+          sourceId,
+          fileSize: videoBlob.size,
+          duration: videoDuration, // Use the actual duration
+          filePath: serverFilePath, // Use the path on the server
+          captionStyle: selectedPreset
+        });
+        
+        if (!saveResponse.ok) {
+          console.error('Failed to save edited video to database');
+          throw new Error('Failed to save video to database');
+        }
+        
+        const saveData = await saveResponse.json();
+        console.log('Saved edited video:', saveData);
+        
+        // Store the saved video information
+        setSavedVideoUrl(serverFilePath);
+        setSavedVideoId(saveData.editedVideo.id);
+      
       // Mark as completed
       setExportStage("completed");
       await new Promise(resolve => setTimeout(resolve, 500)); // Show completed state briefly
       
-      // Create download link
-      const url = URL.createObjectURL(videoBlob);
+        // Show the save dialog
+        setShowSaveDialog(true);
+      } catch (saveError) {
+        console.error('Error saving edited video:', saveError);
+        toast({
+          title: "Save Failed",
+          description: "Failed to save edited video to database",
+          variant: "destructive",
+        });
+        
+        // Allow download even if save failed
       const a = document.createElement('a');
-      a.href = url;
-      a.download = `${videoTitle || 'video'}_with_captions.mp4`;
+        a.href = blobUrl;
+        a.download = `${editableTitle || 'video'}_with_captions.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      }
       
-      console.log("Video exported successfully");
+      console.log("Video processed successfully");
     } catch (error) {
-      console.error('Error exporting video:', error);
+      console.error('Error processing video:', error);
       toast({
-        title: "Export Failed",
-        description: `Failed to export video: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        title: "Processing Failed",
+        description: `Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`,
         variant: "destructive",
       });
     } finally {
@@ -159,7 +265,51 @@ export default function Navbar({
     }
   };
   
+  // Function to get video duration
+  const getVideoDuration = (videoUrl: string): Promise<number> => {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.src = videoUrl;
+    });
+  };
   
+  // Handle download button in the save dialog
+  const handleDownload = () => {
+    if (!savedVideoUrl) return;
+    
+    // Create a download link with the full URL
+    const a = document.createElement('a');
+    a.href = savedVideoUrl; // This is now a server path, e.g. /editedClips/uuid.mp4
+    a.download = `${editableTitle || 'video'}_with_captions.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    
+    toast({
+      title: "Download Started",
+      description: "Your video is being downloaded",
+      variant: "default",
+    });
+  };
+  
+  // Handle publish button in the save dialog
+  const handlePublish = () => {
+    setShowSaveDialog(false);
+    
+    toast({
+      title: "Video Published",
+      description: "Your edited video is now on your home page",
+      variant: "default",
+    });
+    
+    // Navigate back to home page
+    router.push('/dashboard/home');
+  };
   
   // Helper function to get stage information
   const getStageInfo = (stage: ExportStage) => {
@@ -173,7 +323,7 @@ export default function Navbar({
       case "processingVideo":
         return { title: "Processing Video", description: "Burning captions to video..." };
       case "finalizing":
-        return { title: "Finalizing", description: "Preparing download..." };
+        return { title: "Finalizing", description: "Preparing video..." };
       case "completed":
         return { title: "Completed", description: "Your video is ready!" };
     }
@@ -195,12 +345,17 @@ export default function Navbar({
         <Link href="/dashboard/home" className="border shadow-md py-2 px-3 font-medium flex items-center justify-center gap-1 rounded-md">
           <ChevronLeft size={20} /> Leave
         </Link>
-        {/* <div className="flex items-center gap-2 text-yellow-500">
-          <p className="text-base">{videoTitle}</p>
-        </div> */}
-        {/* <Link href="pricing" className="bg-yellow py-2 px-3 text-base flex items-center rounded-md gap-2 hover:shadow-md">
-          <Sparkles size={18} /> Upgrade
-        </Link> */}
+        
+        {/* Title Input Field */}
+        <div className="relative w-60">
+          <input 
+            type="text" 
+            value={editableTitle}
+            onChange={(e) => setEditableTitle(e.target.value)}
+            placeholder="Enter video title"
+            className="w-full py-2 px-3 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+          />
+        </div>
       </div>
       
       {/* Center Section */}
@@ -237,10 +392,10 @@ export default function Navbar({
         <Button 
           variant="default" 
           className="bg-[#312F37] text-white hover:scale-105 transition-all duration-200 hover:bg-[#312F37]"
-          onClick={handleExport}
+          onClick={handleSave}
           disabled={isExporting || !videoSrc}
         >
-          {isExporting ? 'Exporting...' : 'Export'} <Save size={20} className="ml-2" />
+          {isExporting ? 'Saving...' : 'Save'} <Save size={20} className="ml-2" />
         </Button>
         <Avatar>
           <User size={20} />
@@ -291,6 +446,39 @@ export default function Navbar({
               Please don't close this window while processing.
               {exportStage === "processingVideo" && <span className="block text-xs mt-1 text-yellow-600">This may take a few moments depending on video length.</span>}
             </p>
+          </div>
+        </div>
+      )}
+      
+      {/* Save Dialog */}
+      {showSaveDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg w-96 max-w-[90vw]">
+            <h3 className="text-xl font-medium mb-4 text-center">Video Saved</h3>
+            
+            <p className="text-gray-600 text-center mb-6">
+              Your video has been saved successfully. What would you like to do next?
+            </p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <Button 
+                variant="outline" 
+                className="flex items-center justify-center gap-2"
+                onClick={handleDownload}
+              >
+                <Download size={18} />
+                Download
+              </Button>
+              
+              <Button 
+                variant="default" 
+                className="flex items-center justify-center gap-2 bg-[#312F37] hover:bg-[#312F37]"
+                onClick={handlePublish}
+              >
+                <Share size={18} />
+                Publish
+              </Button>
+            </div>
           </div>
         </div>
       )}

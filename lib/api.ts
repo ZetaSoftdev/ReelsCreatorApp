@@ -75,7 +75,8 @@ export async function saveVideoToDatabase(
     duration: duration,
     fileSize: file.size,
     status: 'processing',
-    uploadPath: `/uploads/${jobId}/${file.name}`
+    uploadPath: `/uploads/${jobId}/${file.name}`,
+    externalJobId: jobId // Add job ID for tracking
   };
   
   return fetch('/api/videos', {
@@ -189,5 +190,37 @@ export async function saveClipsToDatabase(
       videoId,
       clips
     })
+  });
+}
+
+/**
+ * Save edited video to database
+ * @param userId - User ID
+ * @param videoData - Information about the edited video
+ * @returns Response from the API
+ */
+export async function saveEditedVideoToDatabase(
+  userId: string,
+  videoData: {
+    title: string;
+    sourceType: string;
+    sourceId: string;
+    fileSize: number;
+    duration: number;
+    filePath: string;
+    captionStyle?: any;
+  }
+): Promise<Response> {
+  const editedVideoData = {
+    userId,
+    ...videoData
+  };
+  
+  return fetch('/api/videos/edited', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(editedVideoData)
   });
 }

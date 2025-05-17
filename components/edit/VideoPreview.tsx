@@ -28,6 +28,7 @@ interface WordTimestamps {
 interface VideoPreviewProps {
   videoUrl: string;
   wordTimestampsUrl?: string;
+  wordTimestampsData?: any;
   selectedPreset: CaptionPreset;
   // For backward compatibility
   videoSrc?: string;
@@ -38,6 +39,7 @@ interface VideoPreviewProps {
 const VideoPreview: React.FC<VideoPreviewProps> = ({ 
   videoUrl, 
   wordTimestampsUrl,
+  wordTimestampsData,
   selectedPreset,
   videoSrc,
   isYoutube,
@@ -48,11 +50,18 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
   const actualVideoRef = externalVideoRef || internalVideoRef;
   
   const [wordTimestamps, setWordTimestamps] = useState<WordTimestamps | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch and process word timestamps
+  // Use wordTimestampsData if provided, otherwise fetch from URL
   useEffect(() => {
+    if (wordTimestampsData) {
+      console.log("VideoPreview: Updating wordTimestamps from prop data");
+      setWordTimestamps(wordTimestampsData);
+      setIsLoading(false);
+      return;
+    }
+    
     const fetchWordTimestamps = async () => {
       if (!wordTimestampsUrl) {
         setWordTimestamps(null);
@@ -77,7 +86,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
     };
 
     fetchWordTimestamps();
-  }, [wordTimestampsUrl]);
+  }, [wordTimestampsUrl, wordTimestampsData]);
 
   return (
     <div className="video-preview w-full h-full relative">
@@ -85,18 +94,19 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({
       {error && <div className="text-red-500 p-4">{error}</div>}
       
       <div className="relative bg-white w-full h-full flex justify-center items-center py-6">
-        <div className="relative w-auto h-auto" style={{ maxWidth: '80%' }}>
+        <div className="relative w-auto h-auto" style={{ maxWidth: '100%' }}>
           <video 
             ref={actualVideoRef}
             src={videoUrl || videoSrc}
             className="w-full h-auto rounded-lg"
-            style={{ maxHeight: '70vh' }}
+            style={{ height: '55vh' }}
             preload="auto"
           />
           
           {/* Caption renderer overlay */}
           {wordTimestamps && selectedPreset && (
             <CaptionRenderer
+              key={JSON.stringify(wordTimestamps) + selectedPreset.id}
               videoRef={actualVideoRef as React.RefObject<HTMLVideoElement>}
               wordTimestamps={wordTimestamps}
               preset={selectedPreset}

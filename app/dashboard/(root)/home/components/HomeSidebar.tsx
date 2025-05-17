@@ -22,6 +22,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Role } from "@/lib/constants";
 import { toast } from "@/hooks/use-toast";
+import { VideoWithExternalFields } from "@/types/database";
 import {
   getVideoUrl,
   getSubtitleUrl,
@@ -33,9 +34,17 @@ import {
   saveVideoToDatabase,
   saveClipsToDatabase
 } from "@/lib/api";
+import { MdPublish } from "react-icons/md";
 
 // API endpoint from environment variable
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || 'http://reels-creator-alb-555953912.us-west-1.elb.amazonaws.com/api/v1';
+
+// Extend Window interface to include our custom property
+declare global {
+  interface Window {
+    apiErrorToastShown?: boolean;
+  }
+}
 
 // Helper function to ensure URLs are properly formatted with the API endpoint
 const getFullUrl = (url: string): string => {
@@ -130,6 +139,10 @@ export default function HomeSidebar() {
     progress?: number;
     error?: string | null;
   }>({ file: null, url: "", status: null, error: null });
+  // Add state for edited videos
+  const [editedVideos, setEditedVideos] = useState<any[]>([]);
+  const [isLoadingEditedVideos, setIsLoadingEditedVideos] = useState(false);
+  const [currentEditedVideoPage, setCurrentEditedVideoPage] = useState(1);
   const router = useRouter();
 
   // Add user state to store session data
@@ -146,6 +159,9 @@ export default function HomeSidebar() {
 
   // Add loading state for clips
   const [isLoadingClips, setIsLoadingClips] = useState(false);
+
+  // Add new state for number of clips
+  const [numClips, setNumClips] = useState<number>(3);
 
   // Fetch session data from our API endpoint
   useEffect(() => {
@@ -175,6 +191,9 @@ export default function HomeSidebar() {
 
     // Fetch clips from database when component mounts
     fetchClipsFromDatabase();
+    
+    // Fetch edited videos from database when component mounts
+    fetchEditedVideosFromDatabase();
   }, []);
 
   // Add function to fetch clips from database
@@ -546,6 +565,14 @@ export default function HomeSidebar() {
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Job status error:", errorText);
+          
+          // If we get a "No space left on device" error, handle it differently
+          if (errorText.includes("No space left on device")) {
+            setUploadStatus("External API server is out of disk space. Processing may be delayed.");
+            // Don't throw an error, just continue polling with a warning message
+            return;
+          }
+          
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
 
@@ -587,8 +614,54 @@ export default function HomeSidebar() {
         console.error("Error polling job status:", error);
         // Show the error but don't stop polling on temporary network errors
         setUploadStatus(`Checking status... (${error.message || "Network error"})`);
+        
+        // If we keep getting errors for more than 1 minute (12 attempts at 5-second intervals)
+        // suggest that the server might be down
+        pollingErrorCount = (pollingErrorCount || 0) + 1;
+        if (pollingErrorCount > 12) {
+          setUploadStatus("External API may be unavailable. Video is still processing in the background.");
+          toast({
+            title: "Processing Continues",
+            description: "Your video is still processing in the background. You can check back later.",
+            variant: "default",
+          });
+          // Save to DB that processing is ongoing, but we can't check status
+          try {
+            // Find the video in the database and mark it as still processing
+            const videoRecords = await fetch(`/api/videos?status=processing`);
+            const videoData = await videoRecords.json();
+            
+            if (videoData.videos && videoData.videos.length > 0) {
+              // Look for any processing videos that match our job
+              const processingVideo = videoData.videos.find(
+                (v: any) => v.originalUrl && v.originalUrl.includes(jobId)
+              );
+              
+              if (processingVideo) {
+                // Just update the error message that API is unavailable
+                await fetch(`/api/videos/${processingVideo.id}/status`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    error: "External API unavailable. Processing will continue in the background."
+                  })
+                });
+              }
+            }
+            // Clear the interval but keep the UI in processing state
+            clearInterval(intervalId);
+            pollingIntervalRef.current = null;
+          } catch (dbError) {
+            console.error("Failed to update database with API status:", dbError);
+          }
+        }
       }
     }, 5000); // Poll every 5 seconds
+
+    // Initialize error count tracking
+    let pollingErrorCount = 0;
 
     // Save the interval reference for cleanup
     pollingIntervalRef.current = intervalId;
@@ -694,8 +767,15 @@ export default function HomeSidebar() {
       setJobProgress(10);
       setUploadStatus("Uploading video for processing...");
 
-      console.log("Creating video processing job");
-      const jobResponse = await createVideoProcessingJob(file, 3);
+      console.log(`Creating video processing job with ${numClips} clips`);
+      let jobResponse;
+      try {
+        jobResponse = await createVideoProcessingJob(file, numClips);
+        console.log("Job creation response status:", jobResponse.status);
+      } catch (apiError: any) {
+        console.error("API request failed:", apiError);
+        throw new Error(`API request failed: ${apiError.message}`);
+      }
 
       // Set progress after request is sent
       setJobProgress(30);
@@ -747,26 +827,57 @@ export default function HomeSidebar() {
         if (!user?.id) {
           // Try to fetch fresh session data
           try {
+            console.log("No user ID found, fetching fresh session data");
             const sessionResponse = await fetch(`/api/user/session?t=${Date.now()}`);
             if (sessionResponse.ok) {
               const sessionData = await sessionResponse.json();
               if (sessionData.user?.id) {
                 // Update user state
                 setUser(sessionData.user);
+                console.log("Retrieved user ID:", sessionData.user.id);
 
                 // Save video with fresh user ID and exact duration
-                await saveVideoToDatabase(
+                console.log("Saving video to database with refreshed user ID");
+                try {
+                  const saveResponse = await saveVideoToDatabase(
                   sessionData.user.id,
                   file,
                   jobData.job_id,
                   exactDuration
                 );
-                console.log("Video saved to database with refreshed user ID and exact duration");
+                  
+                  console.log("Save response status:", saveResponse.status);
+                  
+                  if (!saveResponse.ok) {
+                    const saveErrorText = await saveResponse.text();
+                    console.error("Database save failed:", saveErrorText);
+                    toast({
+                      title: "Database Save Failed",
+                      description: "Video is processing but could not be saved to database",
+                      variant: "destructive",
+                    });
               } else {
-                console.error("Session data doesn't contain user ID");
+                    const savedData = await saveResponse.json();
+                    console.log("Video saved to database successfully:", savedData);
+                    
+                    // Trigger a fetch of videos from database to update UI
+                    setTimeout(fetchUploadedVideosFromDatabase, 1000);
+                  }
+                } catch (saveError: any) {
+                  console.error("Exception during database save:", saveError);
+                  toast({
+                    title: "Database Error",
+                    description: `Failed to save to database: ${saveError.message}`,
+                    variant: "destructive",
+                  });
+                }
+              } else {
+                console.error("Session data doesn't contain user ID:", sessionData);
               }
+            } else {
+              console.error("Failed to fetch session data:", await sessionResponse.text());
             }
-          } catch (sessionError) {
+          } catch (sessionError: any) {
             console.error("Failed to refresh session:", sessionError);
           }
         } else {
@@ -780,15 +891,30 @@ export default function HomeSidebar() {
               exactDuration
             );
 
+            console.log("Database save response status:", dbSaveResponse.status);
+
             if (!dbSaveResponse.ok) {
-              const errorData = await dbSaveResponse.json();
+              const errorData = await dbSaveResponse.text();
               console.error("Failed to save video to database:", errorData);
+              toast({
+                title: "Database Save Failed",
+                description: "Video is processing but could not be saved to database",
+                variant: "destructive",
+              });
             } else {
               const savedData = await dbSaveResponse.json();
               console.log("Video saved to database:", savedData);
+              
+              // Trigger a fetch of videos from database to update UI
+              setTimeout(fetchUploadedVideosFromDatabase, 1000);
             }
-          } catch (dbError) {
+          } catch (dbError: any) {
             console.error("Error saving video to database:", dbError);
+            toast({
+              title: "Database Error",
+              description: `Failed to save to database: ${dbError.message}`,
+              variant: "destructive",
+            });
             // Don't fail the upload process if database save fails
           }
         }
@@ -981,7 +1107,7 @@ export default function HomeSidebar() {
   // Add function to fetch videos from database
   const fetchUploadedVideosFromDatabase = async () => {
     try {
-      // Make API request to get videos
+      // Make API request to get videos - skip external API check if it's failing
       const response = await fetch('/api/videos?limit=1');
       
       if (!response.ok) {
@@ -989,6 +1115,22 @@ export default function HomeSidebar() {
       }
       
       const data = await response.json();
+      
+      // Check if we got an indication that the external API is down
+      if (data.externalApiStatus === "skipped") {
+        // API checks were skipped due to failures, show a toast message once
+        if (!window.apiErrorToastShown) {
+          toast({
+            title: "API Server Issue",
+            description: "External processing server is experiencing issues. Processing status may not be up-to-date.",
+            variant: "destructive",
+          });
+          window.apiErrorToastShown = true;
+        }
+      } else {
+        // API is working, reset flag
+        window.apiErrorToastShown = false;
+      }
       
       // Check if there are any videos
       if (data.videos && data.videos.length > 0) {
@@ -1007,11 +1149,17 @@ export default function HomeSidebar() {
           
           // If the video was in processing status, show the appropriate UI
           if (lastUploadedVideo.status === "processing") {
-            // Try to get the job ID from the URL if available
+            // Try to get the job ID from the externalJobId field or from the URL
+            if (lastUploadedVideo.externalJobId) {
+              setJobId(lastUploadedVideo.externalJobId);
+              setJobProgress(40); // Default progress for ongoing jobs
+            } else {
+              // Legacy fallback for videos without externalJobId
             const jobIdMatch = lastUploadedVideo.originalUrl.match(/job_id=([^&]+)/);
             if (jobIdMatch && jobIdMatch[1]) {
               setJobId(jobIdMatch[1]);
               setJobProgress(40); // Default progress for ongoing jobs
+              }
             }
           }
         }
@@ -1029,7 +1177,72 @@ export default function HomeSidebar() {
     }
   };
 
-  // Rest of the component is UI rendering
+  // Add auto-refresh when component mounts
+  // useEffect(() => {
+  //   // Set up periodic refresh for processing videos
+  //   const autoRefreshInterval = setInterval(() => {
+  //     // Only auto-refresh if user is on the home page and not uploading
+  //     if (!isUploading) {
+  //       fetchUploadedVideosFromDatabase();
+  //       fetchClipsFromDatabase();
+  //       fetchEditedVideosFromDatabase();
+  //     }
+  //   }, 10000); // Check every 10 seconds
+    
+  //   // Clean up interval on unmount
+  //   return () => {
+  //     clearInterval(autoRefreshInterval);
+  //   };
+  // }, [isUploading]);
+
+  // Fetch edited videos when page changes
+  useEffect(() => {
+    fetchEditedVideosFromDatabase();
+  }, [currentEditedVideoPage]);
+
+  // Edited videos pagination functions
+  const goToNextEditedVideoPage = () => {
+    if (currentEditedVideoPage < Math.ceil(editedVideos.length / clipsPerPage)) {
+      setCurrentEditedVideoPage(currentEditedVideoPage + 1);
+    }
+  };
+
+  const goToPreviousEditedVideoPage = () => {
+    if (currentEditedVideoPage > 1) {
+      setCurrentEditedVideoPage(currentEditedVideoPage - 1);
+    }
+  };
+
+  // Add function to fetch edited videos from database
+  const fetchEditedVideosFromDatabase = async () => {
+    try {
+      setIsLoadingEditedVideos(true);
+
+      // Make API request with pagination
+      const response = await fetch(`/api/videos/edited?page=${currentEditedVideoPage}&limit=${clipsPerPage}`);
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch edited videos: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Update state with fetched edited videos
+      setEditedVideos(data.editedVideos || []);
+      
+      setIsLoadingEditedVideos(false);
+    } catch (error) {
+      console.error('Error fetching edited videos:', error);
+      toast({
+        title: "Error Loading Edited Videos",
+        description: "Failed to load edited videos from database",
+        variant: "destructive",
+      });
+      setIsLoadingEditedVideos(false);
+    }
+  };
+
+
   return (
     <div className="">
       <HomeHeader pageName={"Home"} />
@@ -1089,7 +1302,7 @@ export default function HomeSidebar() {
               <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="ml-3 text-gray-700">Loading clips...</p>
             </div>
-          ) : (processedClips.length > 0 || clipsList.length > 0) ? (
+          ) : ((processedClips.length > 0 || clipsList.length > 0) ? (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
                 {/* New API display (primary) */}
@@ -1251,6 +1464,102 @@ export default function HomeSidebar() {
             >
               <UploadCloud size={24} className="font-semibold" /> No Shorts found, click here to import a Short
             </button>
+          ))}
+        </div>
+
+        <hr className="my-6 border-gray-300" />
+
+        {/* New Edited Videos Section */}
+        <div className="">
+          <div className="flex items-center justify-between mt-4">
+            <div>
+              <h6 className="text-lg font-medium">My Edited Videos</h6>
+              <p className="text-sm mt-1">These are videos you edited and saved for later use.</p>
+            </div>
+          </div>
+
+          {/* Edited Videos List */}
+          {isLoadingEditedVideos ? (
+            <div className="flex justify-center items-center h-72 mt-6">
+              <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+              <p className="ml-3 text-gray-700">Loading edited videos...</p>
+            </div>
+          ) : editedVideos.length > 0 ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mt-6">
+                {editedVideos.map((video) => (
+                  <div key={video.id} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <div className="relative aspect-[9/16] bg-black">
+                      <video
+                        className="w-full h-full object-cover"
+                        controls
+                        src={video.filePath}
+                        onError={(e) => {
+                          console.error("Video loading error for:", video.title, e);
+                        }}
+                      />
+                    </div>
+                    <div className="p-2">
+                      <h3 className="font-medium text-xs">
+                        {video.title}
+                      </h3>
+                      <div className="flex justify-between items-center mt-2">
+                        <a
+                          href={video.filePath}
+                          download={video.title}
+                          className="flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Download size={14} />
+                        </a>
+                        <button
+                          onClick={() => {
+                            // Navigate to edit page with the video URL
+                            router.push(`/dashboard/schedule`);
+                          }}
+                          className="flex items-center gap-1 bg-purple-50 hover:bg-purple-100 text-purple-600 font-medium px-3 py-1.5 rounded-md transition-colors text-xs"
+                        >
+                          <MdPublish />
+                          Publish
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination Controls */}
+              {Math.ceil(editedVideos.length / clipsPerPage) > 1 && (
+                <div className="flex justify-center items-center mt-6 gap-4">
+                  <button
+                    onClick={goToPreviousEditedVideoPage}
+                    disabled={currentEditedVideoPage === 1}
+                    className={`p-2 rounded-md border ${currentEditedVideoPage === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+
+                  <span className="text-sm font-medium">
+                    {currentEditedVideoPage} of {Math.ceil(editedVideos.length / clipsPerPage)}
+                  </span>
+
+                  <button
+                    onClick={goToNextEditedVideoPage}
+                    disabled={currentEditedVideoPage === Math.ceil(editedVideos.length / clipsPerPage)}
+                    className={`p-2 rounded-md border ${currentEditedVideoPage === Math.ceil(editedVideos.length / clipsPerPage) ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+
+                  <span className="text-sm text-gray-500">Videos per page: <span className="font-medium">6</span></span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="w-full h-60 mt-6 p-6 flex flex-col gap-3 items-center justify-center border-2 border-dashed border-gray-300 bg-slate50 rounded-xl text-gray-400">
+              <Edit2 size={24} className="font-semibold" /> No edited videos found. Edit a video and save it to see it here.
+            </div>
           )}
         </div>
 
@@ -1411,33 +1720,50 @@ export default function HomeSidebar() {
               </div>
             ) : (
               <>
-                {/* YouTube Import Section */}
-                {/* <div className="mt-6">
-                  <label className="text-gray-700 font-medium block mb-2">Paste YouTube Link</label>
-                  <div className="relative">
+                {/* Number of Clips selector */}
+                <div className="mt-6 mb-6">
+                  <label className="text-gray-700 font-medium block mb-2">Number of Clips to Create</label>
+                  <div className="flex items-center justify-between">
+                    <button 
+                      onClick={() => setNumClips(Math.max(1, numClips - 1))}
+                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700"
+                      disabled={numClips <= 1}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <div className="flex-1 mx-4">
+                      <div className="relative pt-1">
                   <input
-                    type="text"
-                    placeholder="https://www.youtube.com/watch?v=..."
-                      className="w-full border border-gray-300 p-3 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    value={youtubeLink}
-                    onChange={(e) => setYoutubeLink(e.target.value)}
-                  />
+                          type="range"
+                          min="1"
+                          max="10"
+                          value={numClips}
+                          onChange={(e) => setNumClips(parseInt(e.target.value))}
+                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 px-1 mt-2">
+                          <span>1</span>
+                          <span>5</span>
+                          <span>10</span>
+                        </div>
+                      </div>
                   </div>
                   <button
-                    onClick={handleImportYoutube}
-                    className="w-full bg-purple-600 text-white mt-3 py-3 rounded-lg hover:bg-purple-700 transition-all duration-200 font-medium flex items-center justify-center gap-2"
+                      onClick={() => setNumClips(Math.min(10, numClips + 1))}
+                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700"
+                      disabled={numClips >= 10}
                   >
-                    <Import size={18} />
-                    Import from YouTube
+                      <ChevronRight size={18} />
                   </button>
-                </div> */}
-
-                {/* OR Divider */}
-                {/* <div className="flex items-center my-6">
-                  <div className="flex-grow h-0.5 bg-gray-200"></div>
-                  <span className="mx-4 text-gray-500 font-medium">OR</span>
-                  <div className="flex-grow h-0.5 bg-gray-200"></div>
-                </div> */}
+                  </div>
+                  <div className="text-center mt-2">
+                    <span className="text-purple-600 font-medium text-lg">{numClips}</span>
+                    <span className="text-gray-600 ml-1">clip{numClips !== 1 ? 's' : ''}</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Select how many short clips you want to create from your video.
+                  </p>
+                </div>
 
                 {/* Drag & Drop Upload Section */}
                 <div

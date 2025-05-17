@@ -11,8 +11,9 @@
 8. [Application Flows](#application-flows)
 9. [Stripe Integration](#stripe-integration)
 10. [Video Processing](#video-processing)
-11. [Coding Conventions](#coding-conventions)
-12. [Error Handling](#error-handling)
+11. [Social Media Integration](#social-media-integration)
+12. [Coding Conventions](#coding-conventions)
+13. [Error Handling](#error-handling)
 
 ## Overview
 
@@ -182,6 +183,45 @@ Video processing uses FFMPEG for:
 - Clip extraction
 - Caption burning
 - Format conversion
+
+## Social Media Integration
+
+The application supports publishing videos to various social media platforms:
+
+### OAuth Authentication
+- OAuth 2.0 flow with PKCE for secure authentication
+- Token storage with encryption for security
+- Automatic token refresh when expired
+
+### Supported Platforms
+1. **YouTube**
+   - Video uploads with title, description, and tags
+   - Uses YouTube Data API v3
+   - Implementation in `lib/social/api-clients/youtube.ts`
+
+2. **TikTok**
+   - Video uploads with title, description, and hashtags
+   - Uses TikTok API v2 for authentication and uploads
+   - Implementation in `lib/social/api-clients/tiktok.ts`
+   - Three-step upload process: initialize, upload binary, publish
+
+3. **Instagram, Facebook, Twitter**
+   - Placeholders for future implementation
+   - Current implementation simulates success
+
+### Key Components
+- **OAuth Service**: `lib/social/oauth-service.ts` - Handles authentication flow
+- **API Clients**: Platform-specific API implementations in `lib/social/api-clients/`
+- **Configuration**: Platform settings in `lib/social/config.ts`
+- **Authorization Routes**: `/app/api/auth/authorize/[platform]/route.ts`
+- **Callback Routes**: `/app/api/auth/callback/[platform]/route.ts`
+- **Publishing Route**: `/app/api/social/publish/route.ts`
+
+### Publishing Flow
+1. User selects a video and target social account
+2. System verifies user owns both the video and the social account
+3. Platform-specific API client handles the upload
+4. Results are stored in the database for tracking
 
 ## Coding Conventions
 

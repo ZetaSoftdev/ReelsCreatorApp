@@ -46,6 +46,7 @@ function VideoEditorContent() {
   const [isYoutube, setIsYoutube] = useState(false);
   const [selectedTool, setSelectedTool] = useState("caption");
   const [subtitles, setSubtitles] = useState<Subtitle[]>([]);
+  const [wordTimestampsData, setWordTimestampsData] = useState<any>(null);
   const [selectedPreset, setSelectedPreset] = useState<CaptionPreset | null>(
     PRESET_OPTIONS.find(p => p.id === 'minimal') || null
   );
@@ -134,6 +135,9 @@ function VideoEditorContent() {
         const jsonData = await response.json();
         console.log("Received word timestamps data:", jsonData);
         
+        // Store the original word timestamps data
+        setWordTimestampsData(jsonData);
+        
         // Parse word timestamps to the subtitle format using the selected preset
         const parsedSubtitles = parseWordTimestamps(jsonData, selectedPreset);
         console.log("Parsed subtitles from word timestamps:", parsedSubtitles);
@@ -146,38 +150,76 @@ function VideoEditorContent() {
     loadWordTimestamps();
   }, [wordTimestampsUrl, selectedPreset]);
 
+  // Handle editing of subtitle text
+  const handleSubtitleEdit = (index: number, newText: string) => {
+    if (!wordTimestampsData || !subtitles[index]) return;
+    
+    console.log(`Editing subtitle ${index} from "${subtitles[index].text}" to "${newText}"`);
+    
+    // Create a deep copy of the data to avoid mutating state directly
+    const updatedData = JSON.parse(JSON.stringify(wordTimestampsData));
+    
+    // Find the matching segment and words in the JSON structure
+    const subtitle = subtitles[index];
+    const startTime = subtitle.startTime;
+    const endTime = subtitle.endTime;
+    
+    // Update the text in the wordTimestampsData
+    for (const segment of updatedData.segments) {
+      // Find words within this time range
+      if (segment.words && Array.isArray(segment.words)) {
+        const wordsInRange = segment.words.filter(
+          (word: any) => word.start >= startTime && word.end <= endTime
+        );
+        
+        if (wordsInRange.length > 0) {
+          console.log(`Found ${wordsInRange.length} words to update in segment`);
+          
+          // If this segment contains words in our subtitle range
+          const words = newText.split(' ');
+          const wordCount = Math.min(wordsInRange.length, words.length);
+          
+          // Update words that match our range
+          for (let i = 0; i < wordCount; i++) {
+            console.log(`Updating word ${i} from "${wordsInRange[i].word}" to "${words[i]}"`);
+            wordsInRange[i].word = words[i];
+          }
+          
+          // If fewer new words than original words
+          if (words.length < wordsInRange.length) {
+            // Set remaining words to empty
+            for (let i = words.length; i < wordsInRange.length; i++) {
+              wordsInRange[i].word = '';
+            }
+          }
+        }
+      }
+    }
+    
+    // Update the wordTimestampsData state
+    console.log("Setting updated word timestamps data", updatedData);
+    setWordTimestampsData(updatedData);
+    
+    // Also update the subtitles array to reflect changes immediately in the UI
+    const updatedSubtitles = [...subtitles];
+    updatedSubtitles[index] = {
+      ...updatedSubtitles[index],
+      text: newText
+    };
+    setSubtitles(updatedSubtitles);
+  };
+
   // Handle preset selection from EditSection
   const handlePresetChange = (preset: CaptionPreset) => {
     console.log("Preset changed:", preset);
     setSelectedPreset(preset);
     
     // If we have word timestamps data, reparse it with the new preset
-    if (wordTimestampsUrl) {
-      const loadWordTimestamps = async () => {
-        try {
-          const decodedUrl = decodeURIComponent(wordTimestampsUrl);
-          const response = await fetch(decodedUrl);
-          const jsonData = await response.json();
-          
-          // Reparse with the new preset's wordsPerLine setting
-          const parsedSubtitles = parseWordTimestamps(jsonData, preset);
-          setSubtitles(parsedSubtitles);
-        } catch (error) {
-          console.error("Error reloading word timestamps after preset change:", error);
-        }
-      };
-      
-      loadWordTimestamps();
+    if (wordTimestampsData) {
+      // Reparse with the new preset's wordsPerLine setting
+      const parsedSubtitles = parseWordTimestamps(wordTimestampsData, preset);
+      setSubtitles(parsedSubtitles);
     }
-  };
-
-  // Format seconds to MM:SS:MS display format (including milliseconds)
-  const formatDisplayTime = (timeInSeconds: number): string => {
-    const minutes = Math.floor(timeInSeconds / 60);
-    const seconds = Math.floor(timeInSeconds % 60);
-    const milliseconds = Math.floor((timeInSeconds % 1) * 1000);
-    
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${milliseconds.toString().padStart(3, '0')}`;
   };
 
   const handleCutVideo = (start: number, end: number) => {
@@ -194,13 +236,19 @@ function VideoEditorContent() {
         videoSrc={videoSrc}
         wordTimestampsUrl={wordTimestampsUrl ? decodeURIComponent(wordTimestampsUrl) : undefined}
         selectedPreset={selectedPreset}
+        wordTimestampsData={wordTimestampsData}
       />
 
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Sidebar */}
         <div className="w-1/3 p-4 bg-bgWhite border-r shadow-md overflow-y-auto">
           {selectedTool === "crop" && <CropSection />}
-          {selectedTool === "caption" && <CaptionSection subtitles={subtitles} />}
+          {selectedTool === "caption" && (
+            <CaptionSection 
+              subtitles={subtitles} 
+              onSubtitleEdit={handleSubtitleEdit}
+            />
+          )}
           {selectedTool === "style" && <EditSection onPresetChange={handlePresetChange} />}
           {selectedTool === "translate" && <AutoTranslateSection />}
         </div>
@@ -211,9 +259,10 @@ function VideoEditorContent() {
           <div className="flex-grow">
             <VideoPreview 
               videoUrl={videoSrc}
-              selectedPreset={selectedPreset || PRESET_OPTIONS.find((p: CaptionPreset) => p.id === 'minimal')!}
+              selectedPreset={selectedPreset || PRESET_OPTIONS.find((p: CaptionPreset) => p.id === 'basic')!}
               wordTimestampsUrl={wordTimestampsUrl ? decodeURIComponent(wordTimestampsUrl) : undefined}
               videoRef={videoRef}
+              wordTimestampsData={wordTimestampsData}
             />
           </div>
 

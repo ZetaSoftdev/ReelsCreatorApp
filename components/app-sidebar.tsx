@@ -15,6 +15,8 @@ import {
   PieChart,
   Settings2,
   SquareTerminal,
+  Share2,
+  BarChart
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -66,8 +68,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   // This is sample data.
   const data = {
     user: {
-      name: session?.user?.name || "Guest User",
-      email: session?.user?.email || "guest@example.com",
+      name: session?.user?.name || "",
+      email: session?.user?.email || "",
       avatar: session?.user?.image || "/default-avatar.png",
       id: session?.user?.id || "user-1",
     },
@@ -88,6 +90,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         url: "/dashboard/schedule",
         icon: GrSchedule,
         isActive: pathname === "/dashboard/schedule",
+      },
+      {
+        title: "Social Accounts",
+        url: "/dashboard/social-accounts",
+        icon: Share2,
+        isActive: pathname === "/dashboard/social-accounts",
+      },
+      {
+        title: "Social Dashboard",
+        url: "/dashboard/social-dashboard",
+        icon: BarChart,
+        isActive: pathname === "/dashboard/social-dashboard",
       },
       {
         title: "Services",

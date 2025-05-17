@@ -69,21 +69,149 @@ export interface CaptionPreset {
   padding?: number;
   backgroundColor?: string;
   highlightColor?: string;
+  highlightBgColor?: string;  // Background color for highlighted words
+  highlightBgOpacity?: number; // Background opacity for highlighted words
   textColor?: string;
   animationType?: string;
   textOutline?: boolean;
   outlineColor?: string;
   outlineWidth?: number;
   wordsPerLine?: number;
+  scale?: number; // Global scale factor for captions
+  highlightScale?: number; // Scale factor specifically for highlighted words
+  letterSpacing?: number; // Space between characters in pixels
+  wordSpacing?: number; // Extra space between words in pixels
 }
 
 // Predefined caption presets
 export const PRESET_OPTIONS: CaptionPreset[] = [
   {
-    id: 'minimal',
-    name: 'Minimal',
+    id: 'basic',
+    name: 'Basic',
     fontFamily: 'Poppins, sans-serif',
-    fontSize: 24,
+    fontSize: 42,
+    fontWeight: 'normal',
+    color: '#FFFFFF',
+    bgColor: 'transparent',
+    bgOpacity: 0,
+    textShadow: false,
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFFFF'
+  },
+  {
+    id: 'basic-yellow',
+    name: 'Basic Yellow',
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 42,
+    fontWeight: 'normal',
+    color: '#FFFF00',
+    bgColor: 'transparent',
+    bgOpacity: 0,
+    textShadow: false,
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFF00'
+  },
+  // {
+  //   id: 'word-highlight',
+  //   name: 'Word Highlight',
+  //   fontFamily: 'Poppins, sans-serif',
+  //   fontSize: 42,
+  //   fontWeight: 'normal',
+  //   color: '#FFFFFF',
+  //   bgColor: 'transparent',
+  //   bgOpacity: 0,
+  //   textShadow: false,
+  //   animation: 'highlight',
+  //   position: 'center',
+  //   marginY: 0,
+  //   wordsPerLine: 4,
+  //   highlightColor: '#FFFFFF',
+  //   highlightBgColor: '#FF00FF',  // Magenta background for highlighted words
+  //   highlightBgOpacity: 1,        // Fully opaque
+  //   textOutline: false
+  // },
+  {
+    id: 'yallow',
+    name: 'Yallow Highlight',
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    bgColor: 'transparent',
+    bgOpacity: 0,
+    textShadow: false,
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FFFF00',
+    textOutline: false
+  },
+  // {
+  //   id: 'highlight-box',
+  //   name: 'Highlight Box',
+  //   fontFamily: 'Roboto, sans-serif',
+  //   fontSize: 42,
+  //   fontWeight: 'normal',
+  //   color: '#ffffff',
+  //   bgColor: 'transparent',
+  //   bgOpacity: 0,
+  //   textShadow: false,
+  //   animation: 'highlight',
+  //   position: 'center',
+  //   marginY: 0,
+  //   wordsPerLine: 4,
+  //   highlightColor: '#000000',
+  //   highlightBgColor: '#FFFF00',  // Yellow highlight background
+  //   highlightBgOpacity: 1,        // Fully opaque
+  //   textOutline: false
+  // },
+  // {
+  //   id: 'subtle-highlight',
+  //   name: 'Subtle Highlight',
+  //   fontFamily: 'Montserrat, sans-serif',
+  //   fontSize: 42,
+  //   fontWeight: 'normal',
+  //   color: '#FFFFFF',
+  //   bgColor: '#000000',
+  //   bgOpacity: 0.5,
+  //   textShadow: false,
+  //   animation: 'highlight',
+  //   position: 'center',
+  //   marginY: 0,
+  //   wordsPerLine: 4,
+  //   highlightColor: '#FFFFFF',
+  //   highlightBgColor: '#FFFFFF',  // White highlight background
+  //   highlightBgOpacity: 0.3,      // Very transparent
+  //   textOutline: false
+  // },
+  {
+    id: 'one-word',
+    name: 'One Word Color',
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 42,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    bgColor: 'transparent',
+    bgOpacity: 0,
+    textShadow: false,
+    animation: 'highlight',
+    position: 'center',
+    marginY: 0,
+    wordsPerLine: 4,
+    highlightColor: '#FF0000'
+  },
+  {
+    id: 'iman-v1',
+    name: 'Iman V1',
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 42,
     fontWeight: 'normal',
     color: '#FFFFFF',
     bgColor: 'transparent',
@@ -96,62 +224,30 @@ export const PRESET_OPTIONS: CaptionPreset[] = [
     highlightColor: '#FFFF00'
   },
   {
-    id: 'bold',
-    name: 'Bold',
+    id: 'mirage',
+    name: 'Mirage',
     fontFamily: 'Poppins, sans-serif',
-    fontSize: 24,
+    fontSize: 42,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    bgColor: '#000000',
-    bgOpacity: 0.5,
-    textShadow: false,
+    bgColor: 'transparent',
+    bgOpacity: 0,
+    textShadow: true,
     animation: 'highlight',
     position: 'center',
     marginY: 0,
     wordsPerLine: 4,
-    highlightColor: '#FFFF00'
+    highlightColor: '#02FFFF'
   },
   {
-    id: 'tiktok',
-    name: 'TikTok Style',
-    fontFamily: 'Roboto, sans-serif',
-    fontSize: 24,
+    id: 'iman',
+    name: 'Iman',
+    fontFamily: 'Poppins, sans-serif',
+    fontSize: 42,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    bgColor: '#000000',
-    bgOpacity: 0.7,
-    textShadow: false,
-    animation: 'highlight',
-    position: 'center',
-    marginY: 0,
-    wordsPerLine: 4,
-    highlightColor: '#00FFFF'
-  },
-  {
-    id: 'subtitles',
-    name: 'Subtitles',
-    fontFamily: 'Roboto, sans-serif',
-    fontSize: 24,
-    fontWeight: 'normal',
-    color: '#FFFFFF',
-    bgColor: '#000000',
-    bgOpacity: 0.6,
-    textShadow: false,
-    animation: 'highlight',
-    position: 'center',
-    marginY: 0,
-    wordsPerLine: 4,
-    highlightColor: '#FFFF00'
-  },
-  {
-    id: 'colorful',
-    name: 'Colorful',
-    fontFamily: 'Pacifico, cursive',
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FF9500',
-    bgColor: '#5856D6',
-    bgOpacity: 0.7,
+    bgColor: 'transparent',
+    bgOpacity: 0,
     textShadow: true,
     animation: 'highlight',
     position: 'center',
@@ -160,20 +256,38 @@ export const PRESET_OPTIONS: CaptionPreset[] = [
     highlightColor: '#FFFFFF'
   },
   {
-    id: 'outline',
-    name: 'Outline',
-    fontFamily: 'Montserrat, sans-serif',
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    bgColor: 'transparent',
+    id: "Highlight-Box",
+    name: "Highlight Box",
+    fontFamily: "Nerko One, cursive",
+    fontSize: 42,
+    fontWeight: "normal",
+    color: "#FFFFFF",
+    bgColor: "transparent",
     bgOpacity: 0,
     textShadow: true,
-    animation: 'highlight',
-    position: 'center',
+    animation: "highlight",
+    position: "center",
     marginY: 0,
     wordsPerLine: 4,
-    highlightColor: '#00FFFF'
+    highlightColor: "#FFFF00"
+  },
+  {
+    id: "new-amsterdam",
+    name: "New Amsterdam",
+    animation: "highlight",
+    bgColor: "transparent",
+    bgOpacity: 0,
+    color: "#FFFFFF",
+    fontFamily: "New Amsterdam, cursive",
+    fontSize: 42,
+    fontWeight: "bold",
+    highlightColor: "#FF0000",
+    marginY: 0,
+    position: "center",
+    textShadow: false,
+    wordsPerLine: 3,
+    scale: 1.0, // Default scale
+    highlightScale: 1.3 // Scale up highlighted words by 30%
   }
 ];
 
@@ -185,16 +299,28 @@ interface EditSectionProps {
 }
 
 export default function EditSection({ onPresetChange, initialPreset, videoUrl, wordTimestampsUrl }: EditSectionProps) {
-  // Initialize with minimal preset or provided initial preset
-  const [selectedPreset, setSelectedPreset] = useState<CaptionPreset>(
-    initialPreset || PRESET_OPTIONS.find(p => p.id === 'minimal')!
-  );
+  // Initialize with a default preset or provided initial preset
+  const [selectedPreset, setSelectedPreset] = useState<CaptionPreset>(() => {
+    // If initialPreset is provided, use it
+    if (initialPreset) return initialPreset;
+    
+    // Otherwise look for basic preset
+    const defaultPreset = PRESET_OPTIONS.find(p => p.id === 'basic');
+    
+    // If basic preset is not found, use the first available preset
+    return defaultPreset || PRESET_OPTIONS[0];
+  });
   
   // For custom preset editing
   const [customPreset, setCustomPreset] = useState<CaptionPreset>({
     ...selectedPreset,
     id: 'custom',
-    name: 'Custom'
+    name: 'Custom',
+    letterSpacing: selectedPreset.letterSpacing || 0,
+    wordSpacing: selectedPreset.wordSpacing || 0,
+    textOutline: selectedPreset.textOutline || false,
+    outlineColor: selectedPreset.outlineColor || '#000000',
+    outlineWidth: selectedPreset.outlineWidth || 1
   });
   
   // State for user's saved custom presets
@@ -210,7 +336,12 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
       setCustomPreset({
         ...initialPreset,
         id: 'custom',
-        name: 'Custom'
+        name: 'Custom',
+        letterSpacing: initialPreset.letterSpacing || 0,
+        wordSpacing: initialPreset.wordSpacing || 0,
+        textOutline: initialPreset.textOutline || false,
+        outlineColor: initialPreset.outlineColor || '#000000',
+        outlineWidth: initialPreset.outlineWidth || 1
       });
     }
   }, [initialPreset]);
@@ -309,7 +440,7 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
         {/* Preset Selection Section */}
         <TabsContent value="presets" className="space-y-4">
           <RadioGroup 
-            value={selectedPreset.id} 
+            value={selectedPreset?.id || ""} 
             onValueChange={handlePresetSelect}
             className="grid grid-cols-2 gap-2"
           >
@@ -317,7 +448,7 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
               <div 
                 key={preset.id}
                 className={`border rounded-lg p-2 relative cursor-pointer ${
-                  selectedPreset.id === preset.id ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
+                  selectedPreset?.id === preset.id ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
                 }`}
                 onClick={() => handlePresetSelect(preset.id)}
               >
@@ -336,23 +467,40 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
                   
                   {/* Preset Preview */}
                   <div 
-                    className="h-16 mt-2 rounded flex items-center justify-center text-center"
+                    className="h-16 mt-2 rounded flex items-center justify-center text-center p-2"
                     style={{
-                      backgroundColor: preset.bgColor !== 'transparent' 
-                        ? `${preset.bgColor}${Math.round(preset.bgOpacity * 255).toString(16).padStart(2, '0')}` 
-                        : undefined,
+                      backgroundColor: '#49556c',
                       color: preset.color,
                       fontFamily: preset.fontFamily,
-                      fontSize: `${preset.fontSize / 2}px`, // Half size for preview
+                      fontSize: `16px`, // Half size for preview with scaling
                       fontWeight: preset.fontWeight,
-                      textShadow: preset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none'
+                      textShadow: preset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none',
+                      position: 'relative',
+                      overflow: 'hidden'
                     }}
                   >
-                    Sample Text
+                    <span style={{
+                      textTransform: preset.id.includes('word') || preset.id === 'mirage' || preset.id === 'iman' ? 'uppercase' : 'none',
+                      fontWeight: preset.fontWeight
+                    }}>
+                      This is <span style={{
+                        color: preset.highlightColor,
+                        padding: preset.id === 'Highlight-Box' ? '0 4px' : 0,
+                        textShadow: preset.id === 'mirage' ? '0 0 8px #ffffff, 0 0 12px rgba(255,255,255,0.8)' : 
+                                  preset.id === 'iman' ? '0 0 10px rgba(255,255,255,0.9)' : 'inherit',
+                        // Apply special scaling for New Amsterdam preset
+                        transform: preset.id === 'new-amsterdam' && preset.highlightScale ? 
+                                  `scale(${preset.highlightScale})` : 'none',
+                        display: 'inline-block', // Required for transform to work properly
+                        transformOrigin: 'center', // Scale from center
+                        WebkitTextStroke: preset.textOutline ? 
+                          `${preset.outlineWidth || 1}px ${preset.outlineColor || '#000000'}` : 'inherit'
+                      }}>how</span> the subtitles look
+                    </span>
                   </div>
                 </div>
                 
-                {selectedPreset.id === preset.id && (
+                {selectedPreset?.id === preset.id && (
                   <div className="absolute top-2 right-2 text-purple-600">
                     <Check size={16} />
                   </div>
@@ -365,7 +513,7 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
               <div 
                 key={preset.id}
                 className={`border rounded-lg p-2 relative cursor-pointer ${
-                  selectedPreset.id === preset.id ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
+                  selectedPreset?.id === preset.id ? 'border-purple-500 bg-purple-50' : 'border-gray-200'
                 }`}
                 onClick={() => handlePresetSelect(preset.id)}
               >
@@ -384,23 +532,42 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
                   
                   {/* Custom Preset Preview */}
                   <div 
-                    className="h-16 mt-2 rounded flex items-center justify-center text-center"
+                    className="h-16 mt-2 rounded flex items-center justify-center text-center p-2"
                     style={{
-                      backgroundColor: preset.bgColor !== 'transparent' 
-                        ? `${preset.bgColor}${Math.round(preset.bgOpacity * 255).toString(16).padStart(2, '0')}` 
-                        : undefined,
+                      backgroundColor: '#49556c',
                       color: preset.color,
                       fontFamily: preset.fontFamily,
-                      fontSize: `${preset.fontSize / 2}px`, // Half size for preview
+                      fontSize: `16px`, // Half size for preview with scaling
                       fontWeight: preset.fontWeight,
-                      textShadow: preset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none'
+                      textShadow: preset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      WebkitTextStroke: preset.textOutline ? 
+                        `${preset.outlineWidth || 1}px ${preset.outlineColor || '#000000'}` : 'inherit'
                     }}
                   >
-                    Sample Text
+                    <span style={{
+                      textTransform: preset.id.includes('word') || preset.id === 'mirage' || preset.id === 'iman' ? 'uppercase' : 'none',
+                      fontWeight: preset.fontWeight
+                    }}>
+                      This is <span style={{
+                        color: preset.highlightColor,
+                        padding: preset.id === 'Highlight-Box' ? '0 4px' : 0,
+                        textShadow: preset.id === 'mirage' ? '0 0 8px #ffffff, 0 0 12px rgba(255,255,255,0.8)' : 
+                                  preset.id === 'iman' ? '0 0 10px rgba(255,255,255,0.9)' : 'inherit',
+                        // Apply special scaling for New Amsterdam preset
+                        transform: preset.id === 'new-amsterdam' && preset.highlightScale ? 
+                                  `scale(${preset.highlightScale})` : 'none',
+                        display: 'inline-block', // Required for transform to work properly
+                        transformOrigin: 'center', // Scale from center
+                        WebkitTextStroke: preset.textOutline ? 
+                          `${preset.outlineWidth || 1}px ${preset.outlineColor || '#000000'}` : 'inherit'
+                      }}>how</span> the subtitles look
+                    </span>
                   </div>
                 </div>
                 
-                {selectedPreset.id === preset.id && (
+                {selectedPreset?.id === preset.id && (
                   <div className="absolute top-2 right-2 text-purple-600">
                     <Check size={16} />
                   </div>
@@ -443,19 +610,38 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
           
           {/* Preview of custom style */}
           <div 
-            className="h-16 mb-4 rounded flex items-center justify-center text-center"
+            className="h-16 mb-4 rounded flex items-center justify-center text-center p-2"
             style={{
-              backgroundColor: customPreset.bgColor !== 'transparent' 
-                ? `${customPreset.bgColor}${Math.round(customPreset.bgOpacity * 255).toString(16).padStart(2, '0')}` 
-                : undefined,
+              backgroundColor: '#49556c', 
               color: customPreset.color,
               fontFamily: customPreset.fontFamily,
-              fontSize: `${customPreset.fontSize / 2}px`, // Half size for preview
+              fontSize: `${(customPreset.fontSize / 2) * (customPreset.scale || 1.0)}px`, 
               fontWeight: customPreset.fontWeight,
-              textShadow: customPreset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none'
+              textShadow: customPreset.textShadow ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none',
+              position: 'relative',
+              overflow: 'hidden',
+              WebkitTextStroke: customPreset.textOutline ? 
+                `${customPreset.outlineWidth || 1}px ${customPreset.outlineColor || '#000000'}` : 'inherit'
             }}
           >
-            Sample Text
+            <span style={{
+              textTransform: customPreset.id.includes('word') || customPreset.id === 'mirage' || customPreset.id === 'iman' ? 'uppercase' : 'none',
+              fontWeight: customPreset.fontWeight
+            }}>
+              This is <span style={{
+                color: customPreset.highlightColor,
+                padding: customPreset.id === 'Highlight-Box' ? '0 4px' : 0,
+                textShadow: customPreset.id === 'mirage' ? '0 0 8px #ffffff, 0 0 12px rgba(255,255,255,0.8)' : 
+                                  customPreset.id === 'iman' ? '0 0 10px rgba(255,255,255,0.9)' : 'inherit',
+                // Apply special scaling for New Amsterdam preset
+                transform: customPreset.id === 'new-amsterdam' && customPreset.highlightScale ? 
+                                  `scale(${customPreset.highlightScale})` : 'none',
+                display: 'inline-block', // Required for transform to work properly
+                transformOrigin: 'center', // Scale from center
+                WebkitTextStroke: customPreset.textOutline ? 
+                  `${customPreset.outlineWidth || 1}px ${customPreset.outlineColor || '#000000'}` : 'inherit'
+              }}>how</span> the subtitles look
+            </span>
           </div>
           
           {/* Customization Controls */}
@@ -478,19 +664,21 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
             </div>
             
             {/* Font Size */}
-            <div className="space-y-2">
-              <div className="flex justify-between">
+            <div>
                 <Label>Font Size</Label>
-                <span className="text-sm text-gray-500">{customPreset.fontSize}px</span>
-              </div>
               <Slider
-                min={16}
-                max={42}
+                defaultValue={[customPreset.fontSize]}
+                min={12}
+                max={72}
                 step={1}
-                value={[customPreset.fontSize]}
                 onValueChange={(value) => handleCustomPresetChange('fontSize', value[0])}
                 disabled={!editMode}
               />
+              <div className="flex justify-between text-xs">
+                <span>12px</span>
+                <span>{customPreset.fontSize}px</span>
+                <span>72px</span>
+              </div>
             </div>
             
             {/* Font Weight */}
@@ -524,26 +712,66 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
             </div>
             
             {/* Highlight Color */}
-            <div className="space-y-2">
+            <div>
               <Label>Highlight Color</Label>
+              <div className="flex items-center gap-2">
               <ColorPicker
                 value={customPreset.highlightColor || '#FFFF00'}
                 onChange={(value) => handleCustomPresetChange('highlightColor', value)}
-                disabled={!editMode}
               />
+              </div>
             </div>
             
+            {/* Highlight Background Color */}
+            {/* Commented out for now as feature is incomplete
+            <div>
+              <Label>Highlight BG Color</Label>
+              <div className="flex items-center gap-2">
+                <ColorPicker
+                  value={customPreset.highlightBgColor || 'transparent'}
+                  onChange={(value) => handleCustomPresetChange('highlightBgColor', value)}
+                />
+              </div>
+            </div>
+            */}
+            
+            {/* Highlight Background Opacity (Only show if highlightBgColor is set) */}
+            {/* Commented out for now as feature is incomplete
+            {customPreset.highlightBgColor && customPreset.highlightBgColor !== 'transparent' && (
+              <div>
+                <Label>
+                  Highlight BG Opacity: {customPreset.highlightBgOpacity !== undefined ? 
+                    Math.round(customPreset.highlightBgOpacity * 100) : 100}%
+                </Label>
+                <Slider
+                  value={[customPreset.highlightBgOpacity !== undefined ? 
+                    customPreset.highlightBgOpacity * 100 : 100]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={(value) => 
+                    handleCustomPresetChange('highlightBgOpacity', value[0] / 100)
+                  }
+                />
+              </div>
+            )}
+            */}
+            
             {/* Background Color */}
-            <div className="space-y-2">
+            {/* Commented out for now as feature is incomplete
+            <div>
               <Label>Background Color</Label>
+              <div className="flex items-center gap-2">
               <ColorPicker
                 value={customPreset.bgColor}
                 onChange={(value) => handleCustomPresetChange('bgColor', value)}
-                disabled={!editMode}
               />
+              </div>
             </div>
+            */}
             
             {/* Background Opacity */}
+            {/* Commented out for now as feature is incomplete
             <div className="space-y-2">
               <div className="flex justify-between">
                 <Label>Background Opacity</Label>
@@ -558,6 +786,7 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
                 disabled={!editMode}
               />
             </div>
+            */}
             
             {/* Text Shadow */}
             <div className="flex items-center justify-between">
@@ -568,6 +797,52 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
                 onCheckedChange={(value) => handleCustomPresetChange('textShadow', value)}
                 disabled={!editMode}
               />
+            </div>
+            
+            {/* Text Outline */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="text-outline">Text Outline</Label>
+                <Switch
+                  id="text-outline"
+                  checked={customPreset.textOutline || false}
+                  onCheckedChange={(value) => handleCustomPresetChange('textOutline', value)}
+                  disabled={!editMode}
+                />
+              </div>
+              
+              {/* Outline Settings (only show when textOutline is enabled) */}
+              {customPreset.textOutline && (
+                <div className="space-y-4 mt-2 pl-4 border-l-2 border-purple-100">
+                  {/* Outline Color */}
+                  <div>
+                    <Label>Outline Color</Label>
+                    <ColorPicker
+                      value={customPreset.outlineColor || '#000000'}
+                      onChange={(value) => handleCustomPresetChange('outlineColor', value)}
+                      disabled={!editMode}
+                    />
+                  </div>
+                  
+                  {/* Outline Width */}
+                  <div>
+                    <div className="flex justify-between">
+                      <Label>Outline Width</Label>
+                      <span className="text-sm text-gray-500">
+                        {customPreset.outlineWidth || 1}px
+                      </span>
+                    </div>
+                    <Slider
+                      defaultValue={[customPreset.outlineWidth || 1]}
+                      min={0.5}
+                      max={3}
+                      step={0.5}
+                      onValueChange={(value) => handleCustomPresetChange('outlineWidth', value[0])}
+                      disabled={!editMode}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Vertical Position */}
@@ -617,31 +892,96 @@ export default function EditSection({ onPresetChange, initialPreset, videoUrl, w
               </RadioGroup>
             </div>
             
-            {/* Words Per Line */}
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <Label>Words Per Line</Label>
-                <span className="text-sm text-gray-500">{customPreset.wordsPerLine || 4}</span>
-              </div>
-              <RadioGroup 
-                value={(customPreset.wordsPerLine || 4).toString()} 
-                onValueChange={(value) => handleCustomPresetChange('wordsPerLine', parseInt(value))}
+            {/* Scale */}
+            <div>
+              <Label>Caption Scale</Label>
+              <Slider
+                defaultValue={[customPreset.scale || 1.0]}
+                min={0.5}
+                max={2.0}
+                step={0.1}
+                onValueChange={(value) => handleCustomPresetChange('scale', value[0])}
                 disabled={!editMode}
-                className="grid grid-cols-4 gap-2"
-              >
-                {[1, 2, 3, 4].map((count) => (
-                  <div key={count} className="flex items-center justify-center">
-                    <RadioGroupItem 
-                      value={count.toString()} 
-                      id={`words-per-line-${count}`} 
-                      className="mr-1"
-                    />
-                    <Label htmlFor={`words-per-line-${count}`}>
-                      {count}
-                    </Label>
+              />
+              <div className="flex justify-between text-xs">
+                <span>0.5x</span>
+                <span>{(customPreset.scale || 1.0).toFixed(1)}x</span>
+                <span>2.0x</span>
+              </div>
+            </div>
+
+            {/* Highlight Scale (only for New Amsterdam preset or custom preset based on it) */}
+            {(customPreset.id === 'new-amsterdam' || customPreset.id === 'custom') && (
+              <div>
+                <Label>Highlighted Word Scale</Label>
+                <Slider
+                  defaultValue={[customPreset.highlightScale || 1.0]}
+                  min={1.0}
+                  max={1.5}
+                  step={0.1}
+                  onValueChange={(value) => handleCustomPresetChange('highlightScale', value[0])}
+                  disabled={!editMode}
+                />
+                <div className="flex justify-between text-xs">
+                  <span>1.0x</span>
+                  <span>{(customPreset.highlightScale || 1.0).toFixed(1)}x</span>
+                  <span>1.5x</span>
+                </div>
+              </div>
+            )}
+
+            {/* Letter Spacing */}
+            <div>
+              <Label>Letter Spacing</Label>
+              <Slider
+                defaultValue={[customPreset.letterSpacing || 0]}
+                min={-2}
+                max={10}
+                step={0.5}
+                onValueChange={(value) => handleCustomPresetChange('letterSpacing', value[0])}
+                disabled={!editMode}
+              />
+              <div className="flex justify-between text-xs">
+                <span>Tight</span>
+                <span>{(customPreset.letterSpacing || 0).toFixed(1)}px</span>
+                <span>Wide</span>
+              </div>
+            </div>
+
+            {/* Word Spacing */}
+            <div>
+              <Label>Word Spacing</Label>
+              <Slider
+                defaultValue={[customPreset.wordSpacing || 0]}
+                min={0}
+                max={20}
+                step={1}
+                onValueChange={(value) => handleCustomPresetChange('wordSpacing', value[0])}
+                disabled={!editMode}
+              />
+              <div className="flex justify-between text-xs">
+                <span>Normal</span>
+                <span>{customPreset.wordSpacing || 0}px</span>
+                <span>Wide</span>
+              </div>
+            </div>
+            
+            {/* Words Per Line */}
+            <div>
+                <Label>Words Per Line</Label>
+              <Slider
+                defaultValue={[customPreset.wordsPerLine || 4]}
+                min={2}
+                max={8}
+                step={1}
+                onValueChange={(value) => handleCustomPresetChange('wordsPerLine', value[0])}
+                disabled={!editMode}
+              />
+              <div className="flex justify-between text-xs">
+                <span>2</span>
+                <span>{customPreset.wordsPerLine || 4}</span>
+                <span>8</span>
                   </div>
-                ))}
-              </RadioGroup>
             </div>
             
             {/* Apply Button */}
