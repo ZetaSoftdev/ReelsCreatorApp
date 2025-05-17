@@ -6,10 +6,13 @@
     "dev": "next dev",
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
-    "postdeploy": "prisma migrate deploy",
+    "postdeploy": "node scripts/railway-fix-migrations.js || node scripts/direct-migration-fix.js && prisma migrate deploy",
     "start": "next start",
     "lint": "next lint",
-    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+    "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts",
+    "fix-railway-migrations": "node scripts/railway-fix-migrations.js",
+    "direct-fix-migrations": "node scripts/direct-migration-fix.js",
+    "reset-migrations": "node scripts/reset-and-recreate-migrations.js"
   },
   "prisma": {
     "seed": "ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
