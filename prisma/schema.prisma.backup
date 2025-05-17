@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String               @id @default(cuid())
+  email                  String               @unique
+  name                   String?
+  password               String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+  profileImage           String?
+  role                   Role                 @default(USER)
+  isSubscribed           Boolean              @default(false)
+  stripeCurrentPeriodEnd DateTime?
+  stripeCustomerId       String?
+  stripePriceId          String?
+  stripeSubscriptionId   String?
+  subscription           Subscription?
+  videos                 Video[]
+  editedVideos           EditedVideo[]
+  socialAccounts         SocialMediaAccount[]
+  scheduledPosts         ScheduledPost[]
+}
+
+model Subscription {
+  id                     String            @id @default(cuid())
+  userId                 String            @unique
+  plan                   String
+  status                 String
+  startDate              DateTime          @default(now())
+  endDate                DateTime?
+  minutesAllowed         Int
+  minutesUsed            Int               @default(0)
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?
+  planId                 String?
+  stripeCurrentPeriodEnd DateTime?
+  stripePriceId          String?
+  subscriptionPlan       SubscriptionPlan? @relation(fields: [planId], references: [id])
+  user                   User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SubscriptionPlan {
+  id                    String         @id @default(cuid())
+  name                  String
+  description           String
+  monthlyPrice          Float
+  yearlyPrice           Float
+  features              String[]
+  minutesAllowed        Int
+  maxFileSize           Int
+  maxConcurrentRequests Int
+  storageDuration       Int
+  isActive              Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  stripePriceId         String?
+  subscriptions         Subscription[]
+}
+
+model Video {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String
+  description     String?
+  originalUrl     String
+  duration        Int
+  fileSize        Int
+  uploadedAt      DateTime  @default(now())
+  status          String
+  processedAt     DateTime?
+  uploadPath      String
+  error           String?
+  externalJobId   String?
+  lastStatusCheck DateTime?
+  clips           Clip[]
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Clip {
+  id                  String    @id @default(cuid())
+  videoId             String
+  title               String?
+  url                 String
+  startTime           Float
+  endTime             Float
+  createdAt           DateTime  @default(now())
+  duration            Float
+  externalCreatedAt   DateTime?
+  externalId          String?
+  filename            String
+  hasSrt              Boolean   @default(false)
+  hasWordTimestamps   Boolean   @default(false)
+  reason              String?
+  subtitleFormat      String?
+  subtitleId          String?
+  subtitleUrl         String?
+  withCaptions        Boolean   @default(false)
+  wordTimestampFormat String?
+  wordTimestampId     String?
+  wordTimestampUrl    String?
+  video               Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model EditedVideo {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String
+  sourceType   String // "video" or "clip"
+  sourceId     String // ID of the original video or clip
+  fileSize     Int
+  duration     Int
+  filePath     String
+  captionStyle Json? // Stores the caption preset used
+  editedAt     DateTime @default(now())
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
+
+  @@index([userId])
+}
+
+model BrandingSettings {
+  id           String   @id @default(cuid())
+  siteName     String   @default("Reels Creator")
+  logoUrl      String?
+  logoPath     String?
+  faviconUrl   String?
+  faviconPath  String?
+  primaryColor String   @default("#8B5CF6")
+  accentColor  String   @default("#F59E0B")
+  defaultFont  String   @default("Poppins")
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+}
+
+model AppSettings {
+  id                       String   @id @default(cuid())
+  userRegistration         Boolean  @default(true)
+  maxUploadSize            Int      @default(500)
+  defaultVideoQuality      String   @default("720p")
+  defaultLanguage          String   @default("en")
+  enableEmailNotifications Boolean  @default(true)
+  maintenanceMode          Boolean  @default(false)
+  fromEmail                String   @default("noreply@reelscreator.com")
+  smtpHost                 String?
+  smtpPort                 String?
+  smtpUsername             String?
+  smtpPassword             String?
+  enableSMTP               Boolean  @default(false)
+  trialPeriod              Int      @default(14)
+  defaultPlan              String   @default("basic")
+  enableRecurring          Boolean  @default(true)
+  gracePeriod              Int      @default(3)
+  allowCancellation        Boolean  @default(true)
+  stripePublishableKey     String?
+  stripeSecretKey          String?
+  stripeWebhookSecret      String?
+  stripeLiveMode           Boolean  @default(false)
+  privacyPolicy            String?
+  termsOfService           String?
+  cookiePolicy             String?
+  dataRetentionDays        Int      @default(90)
+  allowDataExport          Boolean  @default(true)
+  storageProvider          String   @default("local")
+  s3BucketName             String?
+  s3AccessKey              String?
+  s3SecretKey              String?
+  s3Region                 String?
+  maxStorageGB             Int      @default(50)
+  
+  // Social media OAuth credentials
+  youtubeClientId          String?
+  youtubeClientSecret      String?
+  tiktokClientId           String?
+  tiktokClientSecret       String?
+  instagramClientId        String?
+  instagramClientSecret    String?
+  facebookClientId         String?
+  facebookClientSecret     String?
+  twitterClientId          String?
+  twitterClientSecret      String?
+  
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model SocialMediaAccount {
+  id           String         @id @default(cuid())
+  userId       String
+  platform     SocialPlatform
+  accountName  String // Username or handle
+  accessToken  String // Encrypted OAuth token
+  refreshToken String? // Encrypted refresh token (if applicable)
+  tokenExpiry  DateTime? // When the token expires
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledPosts ScheduledPost[]
+
+  @@unique([userId, platform, accountName])
+  @@index([userId])
+}
+
+model ScheduledPost {
+  id                String            @id @default(cuid())
+  userId            String
+  socialAccountId   String
+  videoId           String
+  caption           String?           // Post caption/text
+  hashtags          String[]          // Array of hashtags
+  scheduledFor      DateTime          // When to publish
+  status            PostStatus        @default(SCHEDULED)  
+  postUrl           String?           // URL to the published post (after successful publish)
+  externalPostId    String?           // ID of the post on the social platform
+  failureReason     String?           // If publishing failed
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount     SocialMediaAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  video             EditedVideo       @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([scheduledFor])
+  @@index([status])
+}
+
+enum SocialPlatform {
+  YOUTUBE
+  TIKTOK
+  INSTAGRAM
+  FACEBOOK
+  TWITTER
+}
+
+enum PostStatus {
+  SCHEDULED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  DRAFT
+}
