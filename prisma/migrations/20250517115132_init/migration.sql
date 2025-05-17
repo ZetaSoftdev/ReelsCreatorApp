@@ -240,6 +240,9 @@ CREATE UNIQUE INDEX "Subscription_userId_key" ON "Subscription"("userId");
 -- CreateIndex
 CREATE INDEX "EditedVideo_userId_idx" ON "EditedVideo"("userId");
 
+
+
+
 -- CreateIndex
 CREATE INDEX "SocialMediaAccount_userId_idx" ON "SocialMediaAccount"("userId");
 
