@@ -247,68 +247,28 @@ CREATE TABLE IF NOT EXISTS "ScheduledPost" (
 );
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'User_email_key') THEN
-        CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'Subscription_userId_key') THEN
-        CREATE UNIQUE INDEX "Subscription_userId_key" ON "Subscription"("userId");
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "Subscription_userId_key" ON "Subscription"("userId");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'EditedVideo_userId_idx') THEN
-        CREATE INDEX "EditedVideo_userId_idx" ON "EditedVideo"("userId");
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "EditedVideo_userId_idx" ON "EditedVideo"("userId");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'SocialMediaAccount_userId_idx') THEN
-        CREATE INDEX "SocialMediaAccount_userId_idx" ON "SocialMediaAccount"("userId");
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "SocialMediaAccount_userId_idx" ON "SocialMediaAccount"("userId");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'SocialMediaAccount_userId_platform_accountName_key') THEN
-        CREATE UNIQUE INDEX "SocialMediaAccount_userId_platform_accountName_key" ON "SocialMediaAccount"("userId", "platform", "accountName");
-    END IF;
-END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS "SocialMediaAccount_userId_platform_accountName_key" ON "SocialMediaAccount"("userId", "platform", "accountName");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_userId_idx') THEN
-        CREATE INDEX "ScheduledPost_userId_idx" ON "ScheduledPost"("userId");
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "ScheduledPost_userId_idx" ON "ScheduledPost"("userId");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_scheduledFor_idx') THEN
-        CREATE INDEX "ScheduledPost_scheduledFor_idx" ON "ScheduledPost"("scheduledFor");
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "ScheduledPost_scheduledFor_idx" ON "ScheduledPost"("scheduledFor");
 
 -- CreateIndex
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'ScheduledPost_status_idx') THEN
-        CREATE INDEX "ScheduledPost_status_idx" ON "ScheduledPost"("status");
-    END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS "ScheduledPost_status_idx" ON "ScheduledPost"("status");
 
 -- AddForeignKey
 DO $$
