@@ -34,21 +34,8 @@ export async function GET(req: NextRequest) {
     console.log("Code Verifier:", codeVerifier);
     console.log("Code Challenge:", codeChallenge);
     
-    // Use the NGROK_URL from environment variables with fallback to the request URL
-    const ngrokUrl = process.env.NGROK_URL;
-    
-    // Build the redirect URI using the ngrok URL or fallback to the request URL
-    let redirectUri;
-    if (ngrokUrl) {
-      redirectUri = `${ngrokUrl}/api/auth/callback/tiktok`;
-      console.log("Using NGROK URL for redirect:", redirectUri);
-    } else {
-      const url = new URL(req.url);
-      const baseUrl = `${url.protocol}//${url.host}`;
-      redirectUri = `${baseUrl}/api/auth/callback/tiktok`;
-      console.log("NGROK_URL not found, using request URL for redirect:", redirectUri);
-    }
-    
+    // Build the redirect URI using process.env.NEXT_PUBLIC_APP_URL
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/tiktok`;
     console.log("Using redirect URI:", redirectUri);
     
     // Build TikTok authorization URL with correct scope parameter format

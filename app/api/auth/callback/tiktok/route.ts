@@ -19,17 +19,6 @@ export async function GET(req: NextRequest) {
     console.log("TikTok Error Type:", errorType);
     console.log("TikTok Error Code:", errCode);
     
-    // Get the application base URL for redirects - use either ngrok URL or request origin
-    let appBaseUrl;
-    const ngrokUrl = process.env.NGROK_URL;
-    if (ngrokUrl) {
-      appBaseUrl = ngrokUrl;
-      console.log("Using NGROK_URL for app base URL:", appBaseUrl);
-    } else {
-      appBaseUrl = url.origin.replace('https:', 'http:');
-      console.log("Using request origin for app base URL:", appBaseUrl);
-    }
-    
     if (error) {
       console.error("TikTok OAuth error:", error);
       console.error("Error description:", errorDescription);
@@ -39,10 +28,10 @@ export async function GET(req: NextRequest) {
       // Handle specific error cases
       if (errorType === 'code_challenge' || error === 'param_error') {
         console.error("Code challenge error or parameter error - this typically means the code_challenge format or scope is incorrect");
-        return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=code_challenge_error&error_description=${encodeURIComponent(errorDescription || 'Invalid parameters')}`);
+        return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=code_challenge_error&error_description=${encodeURIComponent(errorDescription || 'Invalid parameters')}`);
       }
       
-      return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=${error}&error_description=${encodeURIComponent(errorDescription || '')}`);
     }
     
     // Get state and code verifier from cookies for validation
@@ -60,14 +49,14 @@ export async function GET(req: NextRequest) {
       console.error("State param exists:", !!stateParam);
       console.error("State cookie exists:", !!stateCookie);
       console.error("State match:", stateParam === stateCookie);
-      return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=invalid_request`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=invalid_request`);
     }
     
     // Parse state to get user ID and platform
     const stateData = parseState(stateParam);
     if (!stateData) {
       console.error("Could not parse state data");
-      return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=invalid_state`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=invalid_state`);
     }
     
     const { userId, platform } = stateData;
@@ -77,27 +66,20 @@ export async function GET(req: NextRequest) {
     // Verify this is actually a TikTok callback
     if (platform !== 'TIKTOK') {
       console.error(`Platform mismatch in callback: expected TIKTOK, got ${platform}`);
-      return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=platform_mismatch`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=platform_mismatch`);
     }
     
     // Verify we have the code verifier
     if (!codeVerifier) {
       console.error("Missing code verifier for PKCE flow");
-      return NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?error=missing_code_verifier`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=missing_code_verifier`);
     }
     
     // Use the redirect URI from the cookie, or build it dynamically if not available
     let redirectUri = redirectUriCookie;
     if (!redirectUri) {
-      // Try to use the NGROK_URL from environment variables
-      if (ngrokUrl) {
-        redirectUri = `${ngrokUrl}/api/auth/callback/tiktok`;
-        console.log("Using NGROK_URL for callback redirect:", redirectUri);
-      } else {
-        // Fallback to the URL from the request
-        redirectUri = `${url.protocol}//${url.host}/api/auth/callback/tiktok`;
-        console.log("Built redirect URI from request:", redirectUri);
-      }
+      redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/tiktok`;
+      console.log("Built redirect URI using NEXT_PUBLIC_APP_URL:", redirectUri);
     }
     
     console.log("Using redirectUri:", redirectUri);
@@ -178,7 +160,7 @@ export async function GET(req: NextRequest) {
           
           // Redirect with scope warning
           const response = NextResponse.redirect(
-            `${appBaseUrl}/dashboard/social-accounts?connected=tiktok&scope_warning=true&missing_scopes=${missingScopes.join(',')}`
+            `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?connected=tiktok&scope_warning=true&missing_scopes=${missingScopes.join(',')}`
           );
           response.cookies.delete("oauth_state");
           response.cookies.delete("oauth_code_verifier");
@@ -221,7 +203,7 @@ export async function GET(req: NextRequest) {
       console.log("Saved token for user:", userId);
       
       // Clear the cookies
-      const response = NextResponse.redirect(`${appBaseUrl}/dashboard/social-accounts?connected=tiktok`);
+      const response = NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?connected=tiktok`);
       response.cookies.delete("oauth_state");
       response.cookies.delete("oauth_code_verifier");
       response.cookies.delete("oauth_redirect_uri");
@@ -237,17 +219,15 @@ export async function GET(req: NextRequest) {
       console.error("Headers:", Object.fromEntries(req.headers));
       
       return NextResponse.redirect(
-        `${appBaseUrl}/dashboard/social-accounts?error=token_exchange&details=${encodeURIComponent(tokenError.message || "Unknown error during token exchange")}`
+        `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=token_exchange&details=${encodeURIComponent(tokenError.message || "Unknown error during token exchange")}`
       );
     }
   } catch (error: any) {
     console.error("Error processing TikTok OAuth callback:", error);
     console.error("Error stack:", error.stack);
     
-    const fallbackUrl = process.env.NGROK_URL || new URL(req.url).origin.replace('https:', 'http:');
-    
     return NextResponse.redirect(
-      `${fallbackUrl}/dashboard/social-accounts?error=${encodeURIComponent(error.message || "Unknown error")}`
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=${encodeURIComponent(error.message || "Unknown error")}`
     );
   }
 }

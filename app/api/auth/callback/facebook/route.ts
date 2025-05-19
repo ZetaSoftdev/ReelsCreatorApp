@@ -13,18 +13,18 @@ export async function GET(req: NextRequest) {
     
     if (error) {
       console.error("Facebook OAuth error:", error);
-      return NextResponse.redirect(`${url.origin}/dashboard/social-accounts?error=${error}`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=${error}`);
     }
     
     if (!code || !stateParam || !stateCookie || stateParam !== stateCookie) {
       console.error("Invalid OAuth callback parameters or state mismatch");
-      return NextResponse.redirect(`${url.origin}/dashboard/social-accounts?error=invalid_request`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=invalid_request`);
     }
     
     // Parse state to get user ID and platform
     const stateData = parseState(stateParam);
     if (!stateData) {
-      return NextResponse.redirect(`${url.origin}/dashboard/social-accounts?error=invalid_state`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=invalid_state`);
     }
     
     const { userId, platform } = stateData;
@@ -32,10 +32,10 @@ export async function GET(req: NextRequest) {
     // Verify this is actually a Facebook callback
     if (platform !== 'FACEBOOK') {
       console.error(`Platform mismatch in callback: expected FACEBOOK, got ${platform}`);
-      return NextResponse.redirect(`${url.origin}/dashboard/social-accounts?error=platform_mismatch`);
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=platform_mismatch`);
     }
     
-    const redirectUri = `${url.origin}/api/auth/callback/facebook`;
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/facebook`;
     
     // Exchange authorization code for tokens
     const tokenResponse = await exchangeCodeForToken(platform, code, redirectUri);
@@ -85,14 +85,14 @@ export async function GET(req: NextRequest) {
     );
     
     // Clear the state cookie
-    const response = NextResponse.redirect(`${url.origin}/dashboard/social-accounts?connected=facebook`);
+    const response = NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?connected=facebook`);
     response.cookies.delete("oauth_state");
     
     return response;
   } catch (error: any) {
     console.error("Error processing Facebook OAuth callback:", error);
     return NextResponse.redirect(
-      `${new URL(req.url).origin}/dashboard/social-accounts?error=${encodeURIComponent(error.message)}`
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/social-accounts?error=${encodeURIComponent(error.message)}`
     );
   }
 } 

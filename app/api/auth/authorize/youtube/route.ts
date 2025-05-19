@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
     const state = generateState(session.user.id, 'YOUTUBE');
     
     // Get the redirect URI
-    const redirectUri = `${req.nextUrl.origin}/api/auth/callback/youtube`;
+    const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/callback/youtube`;
     const authUrl = getAuthorizationUrl('YOUTUBE', clientId, redirectUri, state);
     
     // Create a cookie to store the state
