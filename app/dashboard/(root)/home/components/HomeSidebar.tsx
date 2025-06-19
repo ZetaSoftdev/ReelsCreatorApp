@@ -111,6 +111,17 @@ interface ProcessedClip {
   wordTimestampsResult?: WordTimestampsResult;
 }
 
+// Add interface for imported video type
+interface ImportedVideo {
+  id: string;
+  title: string;
+  originalUrl: string;
+  fileSize: number;
+  status: string;
+  error?: string | null;
+  externalJobId?: string;
+}
+
 export default function HomeSidebar() {
   const [videosOpen, setVideosOpen] = useState(false);
   const [folderOpen, setFolderOpen] = useState(false);
@@ -128,7 +139,7 @@ export default function HomeSidebar() {
   const [currentPage, setCurrentPage] = useState(1);
   const clipsPerPage = 6;
   const [jobId, setJobId] = useState<string | null>(null);
-  const [jobProgress, setJobProgress] = useState<number>(0);
+  const [jobProgress, setJobProgress] = useState<number>(40);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [uploadedVideo, setUploadedVideo] = useState<{
     file: File | null;
@@ -162,6 +173,19 @@ export default function HomeSidebar() {
 
   // Add new state for number of clips
   const [numClips, setNumClips] = useState<number>(3);
+
+  // Add new state for silence removal
+  const [removeSilence, setRemoveSilence] = useState<boolean>(false);
+
+  // Add these state variables near the top where other state variables are defined
+  const [importedVideos, setImportedVideos] = useState<ImportedVideo[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalImportedPages, setTotalImportedPages] = useState(1);
+  const [currentImportedPage, setCurrentImportedPage] = useState(1);
+  const [isLoadingImported, setIsLoadingImported] = useState(false);
+
+  // Add state for total clips count
+  const [totalClips, setTotalClips] = useState(0);
 
   // Fetch session data from our API endpoint
   useEffect(() => {
@@ -200,6 +224,7 @@ export default function HomeSidebar() {
   const fetchClipsFromDatabase = async () => {
     try {
       setIsLoadingClips(true);
+      console.log('Fetching clips for page:', currentPage);
 
       // Make API request with pagination
       const response = await fetch(`/api/clips?page=${currentPage}&limit=${clipsPerPage}`);
@@ -209,29 +234,27 @@ export default function HomeSidebar() {
       }
 
       const data = await response.json();
+      
+      // Debug logs
+      console.log('API Response:', data);
+      console.log('Pagination data:', data.pagination);
+      console.log('Total clips:', data.pagination.total);
+      console.log('Clips array:', data.clips);
 
-      // Update state with fetched clips
-      setProcessedClips(data.clips);
-
-      // For backward compatibility, extract clip filenames
-      const clipFilenames = data.clips.map((clip: ProcessedClip) =>
-        clip.videoResult.metadata.filename
-      );
-      setClipsList(clipFilenames);
-
-      // Get subtitle filenames
-      const subtitleFilenames = data.clips
-        .filter((clip: ProcessedClip) => clip.subtitleResult)
-        .map((clip: ProcessedClip) => clip.subtitleResult?.metadata.video_filename || '');
-      setSubtitlesList(subtitleFilenames);
-
-      // Update pagination information
-      const totalPages = data.pagination.totalPages;
-      // If current page is higher than total pages, go to last page
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(totalPages);
-      }
-
+      // Update state with fetched clips and total count
+      setProcessedClips(data.clips || []);
+      setTotalPages(data.pagination.totalPages);
+      
+      // Ensure we have a valid total count
+      const totalCount = typeof data.pagination.total === 'number' ? data.pagination.total : 0;
+      console.log('Setting total clips count to:', totalCount);
+      setTotalClips(totalCount);
+      
+      // Debug logs after state update
+      console.log('State after update - processedClips:', data.clips?.length);
+      console.log('State after update - totalPages:', data.pagination.totalPages);
+      console.log('State after update - totalClips:', totalCount);
+      
       setIsLoadingClips(false);
     } catch (error) {
       console.error('Error fetching clips:', error);
@@ -244,20 +267,19 @@ export default function HomeSidebar() {
     }
   };
 
+  // Add effect to log when total clips changes
+  useEffect(() => {
+    console.log('Total clips state updated:', totalClips);
+  }, [totalClips]);
+
   // Fetch clips when page changes
   useEffect(() => {
     fetchClipsFromDatabase();
   }, [currentPage]);
 
-  // Calculate total pages - updated to work with both new and old API responses
-  const totalClipsCount = processedClips.length > 0 ? processedClips.length : clipsList.length;
-  const totalPages = Math.ceil(totalClipsCount / clipsPerPage);
-
   // Get current clips - updated to work with both new and old API responses
-  const indexOfLastClip = currentPage * clipsPerPage;
-  const indexOfFirstClip = indexOfLastClip - clipsPerPage;
-  const currentClips = clipsList.slice(indexOfFirstClip, indexOfLastClip);
-  const currentProcessedClips = processedClips.slice(indexOfFirstClip, indexOfLastClip);
+  const currentClips = clipsList.slice(0, clipsPerPage);
+  const currentProcessedClips = processedClips.slice(0, clipsPerPage);
 
   // Change page
   const goToNextPage = () => {
@@ -548,7 +570,8 @@ export default function HomeSidebar() {
     console.log('Starting job polling for ID:', jobId);
 
     // Set initial progress
-    setJobProgress(40);
+    setJobProgress(0);
+    setUploadStatus("Starting processing...");
 
     // This function is called every 5 seconds to check job status
     const intervalId = setInterval(async () => {
@@ -579,19 +602,23 @@ export default function HomeSidebar() {
         const data = await response.json();
         console.log('Job status:', data);
 
-        // Update progress bar - ensure we show at least 40% progress even if the API doesn't return a progress value
-        if (data.progress && typeof data.progress === 'number') {
-          setJobProgress(Math.max(40, data.progress));
+        // Update progress bar based on status
+        if (data.status === 'completed') {
+          setJobProgress(100);
+          setUploadStatus("Processing complete!");
         } else if (data.status === 'processing') {
-          // If no progress but still processing, increment progress slightly
-          setJobProgress(prev => Math.min(prev + 5, 90)); // Increment but cap at 90%
-        }
-
-        // Update status message
-        if (data.status_message) {
-          setUploadStatus(data.status_message);
-        } else {
-          setUploadStatus(`Processing job: ${data.status}`);
+          // If we have a progress value, use it
+          if (data.progress && typeof data.progress === 'number') {
+            setJobProgress(Math.max(0, Math.min(99, data.progress))); // Keep it under 100 until complete
+          } else {
+            // If no progress but still processing, increment progress slightly
+            setJobProgress(prev => Math.min(prev + 2, 99)); // Increment but cap at 99%
+          }
+          
+          // Update status message if provided
+          if (data.status_message) {
+            setUploadStatus(data.status_message);
+          }
         }
 
         if (data.status === 'completed') {
@@ -609,6 +636,7 @@ export default function HomeSidebar() {
             error: `Processing failed: ${errorMessage}`
           }));
           setIsUploading(false);
+          setJobProgress(0);
         }
       } catch (error: any) {
         console.error("Error polling job status:", error);
@@ -767,10 +795,15 @@ export default function HomeSidebar() {
       setJobProgress(10);
       setUploadStatus("Uploading video for processing...");
 
-      console.log(`Creating video processing job with ${numClips} clips`);
+      console.log(`Creating video processing job with ${numClips} clips and silence removal: ${removeSilence}`);
       let jobResponse;
       try {
-        jobResponse = await createVideoProcessingJob(file, numClips);
+        console.log("Final removeSilence value before API call:", removeSilence);
+        jobResponse = await createVideoProcessingJob(
+          file, 
+          numClips,
+          removeSilence
+        );
         console.log("Job creation response status:", jobResponse.status);
       } catch (apiError: any) {
         console.error("API request failed:", apiError);
@@ -1107,8 +1140,10 @@ export default function HomeSidebar() {
   // Add function to fetch videos from database
   const fetchUploadedVideosFromDatabase = async () => {
     try {
-      // Make API request to get videos - skip external API check if it's failing
-      const response = await fetch('/api/videos?limit=1');
+      setIsLoadingImported(true);
+      
+      // Make API request with pagination
+      const response = await fetch(`/api/videos?page=${currentImportedPage}&limit=${clipsPerPage}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch videos: ${response.status} ${response.statusText}`);
@@ -1118,7 +1153,6 @@ export default function HomeSidebar() {
       
       // Check if we got an indication that the external API is down
       if (data.externalApiStatus === "skipped") {
-        // API checks were skipped due to failures, show a toast message once
         if (!window.apiErrorToastShown) {
           toast({
             title: "API Server Issue",
@@ -1128,16 +1162,17 @@ export default function HomeSidebar() {
           window.apiErrorToastShown = true;
         }
       } else {
-        // API is working, reset flag
         window.apiErrorToastShown = false;
       }
       
-      // Check if there are any videos
-      if (data.videos && data.videos.length > 0) {
-        const lastUploadedVideo = data.videos[0]; // Get the most recent video
-        
-        // Only update if there's no active upload
-        if (!isUploading && (!uploadedVideo.status || uploadedVideo.status === "failed" || uploadedVideo.status === "completed")) {
+      // Update state with fetched videos
+      setImportedVideos(data.videos || []);
+      setTotalImportedPages(data.pagination.totalPages);
+      
+      // Only update uploadedVideo if there's no active upload
+      if (!isUploading && (!uploadedVideo.status || uploadedVideo.status === "failed" || uploadedVideo.status === "completed")) {
+        const lastUploadedVideo = data.videos?.[0];
+        if (lastUploadedVideo) {
           setUploadedVideo({
             file: null,
             url: lastUploadedVideo.originalUrl,
@@ -1147,26 +1182,23 @@ export default function HomeSidebar() {
             error: lastUploadedVideo.error || null
           });
           
-          // If the video was in processing status, show the appropriate UI
           if (lastUploadedVideo.status === "processing") {
-            // Try to get the job ID from the externalJobId field or from the URL
             if (lastUploadedVideo.externalJobId) {
               setJobId(lastUploadedVideo.externalJobId);
-              setJobProgress(40); // Default progress for ongoing jobs
+              setJobProgress(40);
             } else {
-              // Legacy fallback for videos without externalJobId
-            const jobIdMatch = lastUploadedVideo.originalUrl.match(/job_id=([^&]+)/);
-            if (jobIdMatch && jobIdMatch[1]) {
-              setJobId(jobIdMatch[1]);
-              setJobProgress(40); // Default progress for ongoing jobs
+              const jobIdMatch = lastUploadedVideo.originalUrl.match(/job_id=([^&]+)/);
+              if (jobIdMatch && jobIdMatch[1]) {
+                setJobId(jobIdMatch[1]);
+                setJobProgress(40);
               }
             }
           }
         }
-        
-        // Set videosOpen to true if there are videos
-        setVideosOpen(true);
       }
+      
+      setVideosOpen(true);
+      setIsLoadingImported(false);
     } catch (error) {
       console.error('Error fetching videos:', error);
       toast({
@@ -1174,26 +1206,27 @@ export default function HomeSidebar() {
         description: "Failed to load videos from database",
         variant: "destructive",
       });
+      setIsLoadingImported(false);
     }
   };
 
-  // Add auto-refresh when component mounts
-  // useEffect(() => {
-  //   // Set up periodic refresh for processing videos
-  //   const autoRefreshInterval = setInterval(() => {
-  //     // Only auto-refresh if user is on the home page and not uploading
-  //     if (!isUploading) {
-  //       fetchUploadedVideosFromDatabase();
-  //       fetchClipsFromDatabase();
-  //       fetchEditedVideosFromDatabase();
-  //     }
-  //   }, 10000); // Check every 10 seconds
-    
-  //   // Clean up interval on unmount
-  //   return () => {
-  //     clearInterval(autoRefreshInterval);
-  //   };
-  // }, [isUploading]);
+  // Add pagination functions for imported videos
+  const goToNextImportedPage = () => {
+    if (currentImportedPage < totalImportedPages) {
+      setCurrentImportedPage(prev => prev + 1);
+    }
+  };
+
+  const goToPreviousImportedPage = () => {
+    if (currentImportedPage > 1) {
+      setCurrentImportedPage(prev => prev - 1);
+    }
+  };
+
+  // Add effect to fetch videos when page changes
+  useEffect(() => {
+    fetchUploadedVideosFromDatabase();
+  }, [currentImportedPage]);
 
   // Fetch edited videos when page changes
   useEffect(() => {
@@ -1308,7 +1341,7 @@ export default function HomeSidebar() {
                 {/* New API display (primary) */}
                 {processedClips.length > 0 ?
                   currentProcessedClips.map((clip, index) => {
-                    const actualIndex = indexOfFirstClip + index;
+                    const actualIndex = index;
                     const { videoResult, subtitleResult, wordTimestampsResult } = clip;
 
                     // Fix URLs to prevent duplication
@@ -1377,7 +1410,7 @@ export default function HomeSidebar() {
                   currentClips.map((clipFilename, index) => {
                     const videoUrl = getVideoUrl(clipFilename);
                     const wordTimestampsUrl = getWordTimestampsUrl(clipFilename.replace('final_', ''));
-                    const actualIndex = indexOfFirstClip + index;
+                    const actualIndex = index;
 
                     return (
                       <div key={index} className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -1433,29 +1466,31 @@ export default function HomeSidebar() {
               </div>
 
               {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex justify-center items-center mt-6 gap-4">
-                  <button
-                    onClick={goToPreviousPage}
-                    disabled={currentPage === 1}
-                    className={`p-2 rounded-md border ${currentPage === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
+              <div className="flex justify-center items-center mt-6 gap-4">
+                {totalPages > 1 && (
+                  <>
+                    <button
+                      onClick={goToPreviousPage}
+                      disabled={currentPage === 1}
+                      className={`p-2 rounded-md border ${currentPage === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
 
-                  <span className="text-sm font-medium">{currentPage} of {totalPages}</span>
+                    <span className="text-sm font-medium">{currentPage} of {totalPages}</span>
 
-                  <button
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
-                    className={`p-2 rounded-md border ${currentPage === totalPages ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
-                  >
-                    <ChevronRight size={18} />
-                  </button>
+                    <button
+                      onClick={goToNextPage}
+                      disabled={currentPage === totalPages}
+                      className={`p-2 rounded-md border ${currentPage === totalPages ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
 
-                  <span className="text-sm text-gray-500">Videos per page: <span className="font-medium">6</span></span>
-                </div>
-              )}
+                <span className="text-sm text-gray-500">Total shorts: {totalClips} / {clipsPerPage} shown per page</span>
+              </div>
             </>
           ) : (
             <button
@@ -1582,59 +1617,150 @@ export default function HomeSidebar() {
 
           {videosOpen && (
             <>
-              {uploadedVideo.url ? (
-                <div className="mt-6 border rounded-lg overflow-hidden">
-                  <div className="flex items-center p-4 gap-4">
-                    <div className="w-48 h-32 bg-black rounded-lg overflow-hidden">
-                      <video
-                        src={uploadedVideo.url}
-                        className="w-full h-full object-cover"
-                        controls
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium">{uploadedVideo.name}</h3>
-                      <p className="text-sm text-gray-500 mt-1">
-                        {uploadedVideo.size ? (uploadedVideo.size / (1024 * 1024)).toFixed(2) : 0} MB
-                      </p>
-
-                      {/* Upload status and progress indicator */}
-                      {uploadedVideo.status === "processing" && (
-                        <div className="mt-4">
-                          <div className="flex flex-col space-y-2">
-                            <div className="flex justify-between items-center">
-                              <p className="text-sm text-gray-700">{uploadStatus || "Processing your video..."}</p>
-                              <p className="text-sm font-medium text-gray-900">{Math.round(jobProgress)}%</p>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2.5">
-                              <div
-                                className="bg-purple-600 h-2.5 rounded-full"
-                                style={{ width: `${jobProgress}%` }}
-                              ></div>
-                            </div>
-                            <button
-                              onClick={handleCancelJob}
-                              className="mt-2 inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                            >
-                              Cancel Processing
-                            </button>
+              {/* Processing Video Section */}
+              {uploadedVideo.status === "processing" && (
+                <div className="mt-6 mb-4">
+                  <div className="border rounded-lg overflow-hidden bg-yellow-50/50">
+                    <div className="flex items-center p-4 gap-4">
+                      <div className="w-48 h-32 bg-black rounded-lg overflow-hidden">
+                        <video
+                          src={uploadedVideo.url}
+                          className="w-full h-full object-cover"
+                          controls
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="font-medium">{uploadedVideo.name}</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {uploadedVideo.size ? `${(uploadedVideo.size / (1024 * 1024)).toFixed(2)} MB` : ''}
+                            </p>
                           </div>
-                          <ErrorDisplay error={uploadedVideo.error} />
+                          <button
+                            onClick={handleCancelJob}
+                            className="text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+                          >
+                            Cancel
+                          </button>
                         </div>
-                      )}
-
-                      {uploadedVideo.status === "completed" && (
-                        <span className="text-green-500 inline-flex items-center mt-2">
-                          <span className="mr-1">✓</span>
-                          Processing completed
-                        </span>
-                      )}
-
-                      {uploadedVideo.status === "failed" && (
-                        <ErrorDisplay error={uploadedVideo.error} />
-                      )}
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-yellow-600 inline-flex items-center">
+                              <span className="mr-1">⌛</span>
+                              {uploadStatus || "Processing..."}
+                            </span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div
+                              className="bg-yellow-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${jobProgress}%` }}
+                            ></div>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">Processing: {jobProgress}%</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* Error Display */}
+              {uploadedVideo.status === "failed" && uploadedVideo.error && (
+                <div className="mt-6 mb-4">
+                  <div className="border rounded-lg overflow-hidden bg-red-50/50">
+                    <div className="flex items-center p-4 gap-4">
+                      <div className="w-48 h-32 bg-black rounded-lg overflow-hidden">
+                        <video
+                          src={uploadedVideo.url}
+                          className="w-full h-full object-cover"
+                          controls
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium">{uploadedVideo.name}</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          {uploadedVideo.size ? `${(uploadedVideo.size / (1024 * 1024)).toFixed(2)} MB` : ''}
+                        </p>
+                        <div className="mt-2">
+                          <span className="text-red-600 inline-flex items-center">
+                            <span className="mr-1">⚠️</span>
+                            {uploadedVideo.error}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Imported Videos List */}
+              {isLoadingImported ? (
+                <div className="flex justify-center items-center h-72 mt-6">
+                  <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="ml-3 text-gray-700">Loading videos...</p>
+                </div>
+              ) : importedVideos.length > 0 ? (
+                <div className="mt-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {importedVideos.map((video, index) => (
+                      <div key={video.id} className="border rounded-lg overflow-hidden">
+                        <div className="flex items-center p-4 gap-4">
+                          <div className="w-48 h-32 bg-black rounded-lg overflow-hidden">
+                            <video
+                              src={video.originalUrl}
+                              className="w-full h-full object-cover"
+                              controls
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium">{video.title}</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                              {(video.fileSize / (1024 * 1024)).toFixed(2)} MB
+                            </p>
+                            {video.status === "completed" && (
+                              <span className="text-green-500 inline-flex items-center mt-2">
+                                <span className="mr-1">✓</span>
+                                Completed
+                              </span>
+                            )}
+                            {video.status === "failed" && (
+                              <span className="text-red-500 inline-flex items-center mt-2">
+                                <span className="mr-1">⚠️</span>
+                                Failed: {video.error}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Pagination Controls for Imported Videos */}
+                  {totalImportedPages > 1 && (
+                    <div className="flex justify-center items-center mt-6 gap-4">
+                      <button
+                        onClick={goToPreviousImportedPage}
+                        disabled={currentImportedPage === 1}
+                        className={`p-2 rounded-md border ${currentImportedPage === 1 ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+
+                      <span className="text-sm font-medium">{currentImportedPage} of {totalImportedPages}</span>
+
+                      <button
+                        onClick={goToNextImportedPage}
+                        disabled={currentImportedPage === totalImportedPages}
+                        className={`p-2 rounded-md border ${currentImportedPage === totalImportedPages ? 'text-gray-400 border-gray-200' : 'text-gray-700 border-gray-300 hover:bg-gray-100'}`}
+                      >
+                        <ChevronRight size={18} />
+                      </button>
+
+                      <span className="text-sm text-gray-500">Videos per page: <span className="font-medium">{clipsPerPage}</span></span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <button
@@ -1711,7 +1837,7 @@ export default function HomeSidebar() {
                   {jobProgress > 0 && (
                     <div className="w-full bg-gray-200 rounded-full h-2.5 mt-4 mx-auto max-w-xs">
                       <div
-                        className="bg-purple-600 h-2.5 rounded-full transition-all duration-500"
+                        className="bg-purple-600 h-2.5 rounded-full"
                         style={{ width: `${jobProgress}%` }}
                       ></div>
                     </div>
@@ -1720,48 +1846,48 @@ export default function HomeSidebar() {
               </div>
             ) : (
               <>
-                {/* Number of Clips selector */}
-                <div className="mt-6 mb-6">
-                  <label className="text-gray-700 font-medium block mb-2">Number of Clips to Create</label>
-                  <div className="flex items-center justify-between">
-                    <button 
-                      onClick={() => setNumClips(Math.max(1, numClips - 1))}
-                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700"
-                      disabled={numClips <= 1}
+                {/* Number of Clips Selector */}
+                <div className="mb-6">
+                  <div className="flex justify-center items-center gap-4 mt-6">
+                    <button
+                      onClick={() => setNumClips(prev => Math.max(1, prev - 1))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
                     >
                       <ChevronLeft size={18} />
                     </button>
-                    <div className="flex-1 mx-4">
-                      <div className="relative pt-1">
-                  <input
-                          type="range"
-                          min="1"
-                          max="10"
-                          value={numClips}
-                          onChange={(e) => setNumClips(parseInt(e.target.value))}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                        />
-                        <div className="flex justify-between text-xs text-gray-500 px-1 mt-2">
-                          <span>1</span>
-                          <span>5</span>
-                          <span>10</span>
-                        </div>
-                      </div>
-                  </div>
-                  <button
-                      onClick={() => setNumClips(Math.min(10, numClips + 1))}
-                      className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700"
-                      disabled={numClips >= 10}
-                  >
+                    <div className="text-center">
+                      <span className="text-purple-600 font-medium text-lg">{numClips}</span>
+                      <span className="text-gray-600 ml-1">clip{numClips !== 1 ? 's' : ''}</span>
+                    </div>
+                    <button
+                      onClick={() => setNumClips(prev => Math.min(10, prev + 1))}
+                      className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                    >
                       <ChevronRight size={18} />
-                  </button>
+                    </button>
                   </div>
-                  <div className="text-center mt-2">
-                    <span className="text-purple-600 font-medium text-lg">{numClips}</span>
-                    <span className="text-gray-600 ml-1">clip{numClips !== 1 ? 's' : ''}</span>
-                  </div>
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-gray-500 mt-2 text-center">
                     Select how many short clips you want to create from your video.
+                  </p>
+                </div>
+
+                {/* Silence Removal Checkbox */}
+                <div className="mb-6">
+                  <label className="flex items-center justify-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={removeSilence}
+                      onChange={(e) => {
+                        const newValue = e.target.checked;
+                        console.log("Checkbox changed to:", newValue);
+                        setRemoveSilence(newValue);
+                      }}
+                      className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                    />
+                    <span className="text-gray-700">Remove silence from video</span>
+                  </label>
+                  <p className="text-sm text-gray-500 mt-2 text-center">
+                    Automatically remove silent parts from the video
                   </p>
                 </div>
 

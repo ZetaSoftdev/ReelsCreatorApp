@@ -28,15 +28,26 @@ const formatApiUrl = (url: string): string => {
  * Create a new video processing job
  * @param file - The video file to process
  * @param numClips - Number of clips to generate (default: 3)
+ * @param removeSilence - Whether to remove silence from the video (default: false)
+ * @param silenceThreshold - Threshold for silence detection in dB (default: -40)
+ * @param minSilenceDuration - Minimum silence duration in seconds (default: 0.5)
  * @returns The API response with job ID and status
  */
 export async function createVideoProcessingJob(
   file: File, 
-  numClips: number = 3
+  numClips: number = 3,
+  removeSilence: boolean = false,
+  silenceThreshold: number = -30,
+  minSilenceDuration: number = 500
 ): Promise<Response> {
   const formData = new FormData();
   formData.append("video", file);
   formData.append("num_clips", numClips.toString());
+  // Convert boolean to string 'true' or 'false' for the API
+  formData.append("remove_silence", removeSilence.toString());
+  console.log("Sending remove_silence value to API:", removeSilence.toString());
+  formData.append("min_silence_len", minSilenceDuration.toString());
+  formData.append("silence_thresh", silenceThreshold.toString());
   
   return fetch(`${API_ENDPOINT}/jobs/video`, {
     method: 'POST',

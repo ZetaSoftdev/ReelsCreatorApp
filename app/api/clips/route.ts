@@ -202,6 +202,9 @@ export async function GET(req: NextRequest) {
       where 
     });
 
+    console.log('Clips count query where clause:', where);
+    console.log('Total clips count:', total);
+
     // Get clips with pagination
     const clips = await prisma.clip.findMany({
       where,
@@ -219,6 +222,9 @@ export async function GET(req: NextRequest) {
       skip,
       take: limit
     });
+
+    console.log('Found clips:', clips.length);
+    console.log('Pagination details:', { total, page, limit, totalPages: Math.ceil(total / limit) });
 
     // Format clips to match the structure expected by the frontend
     const formattedClips = clips.map(clip => ({
@@ -261,7 +267,7 @@ export async function GET(req: NextRequest) {
       } : undefined
     }));
 
-    return NextResponse.json({
+    const response = {
       clips: formattedClips,
       pagination: {
         total,
@@ -269,7 +275,11 @@ export async function GET(req: NextRequest) {
         limit,
         totalPages: Math.ceil(total / limit)
       }
-    });
+    };
+
+    console.log('Sending response with pagination:', response.pagination);
+
+    return NextResponse.json(response);
   } catch (error: any) {
     console.error("Error fetching clips:", error);
     return NextResponse.json(
