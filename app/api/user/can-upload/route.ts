@@ -136,11 +136,11 @@ export async function GET() {
       });
     } else {
       // Non-subscribed users - check if they've used their free video
-      if (videoCount === 0) {
+      if (videoCount < 5) {
         // Allow one free video
         return NextResponse.json({
           allowed: true,
-          message: 'You can upload one video for free',
+          message: 'You can upload 5 videos for free',
           freeUpload: true,
           videoCount
         });
